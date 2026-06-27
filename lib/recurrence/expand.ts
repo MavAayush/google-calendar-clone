@@ -131,6 +131,24 @@ export function expandEventSeries(
         continue;
       }
       if (exception.exceptionType === "MODIFIED") {
+        if (exception.overrideEvent) {
+          results.push({
+            id: `${event.id}-${dateStr}`,
+            title: exception.overrideEvent.title,
+            description: exception.overrideEvent.description,
+            startTime: exception.overrideEvent.startTime.toISOString(),
+            endTime: exception.overrideEvent.endTime.toISOString(),
+            allDay: exception.overrideEvent.allDay,
+            isRecurring: true,
+            recurrence: {
+              frequency: rule.frequency,
+              interval: rule.interval,
+              seriesEndDate: rule.seriesEndDate ? seriesEndStr : null,
+              byDay: rule.byDay as string[] | null,
+            },
+            version: exception.overrideEvent.version,
+          });
+        }
         continue;
       }
     }
@@ -154,6 +172,42 @@ export function expandEventSeries(
       },
       version: event.version,
     });
+  }
+
+  // Handle rescheduled modified events whose original instanceDate is outside the query window
+  for (const exception of event.exceptions) {
+    if (exception.exceptionType === "MODIFIED" && exception.overrideEvent) {
+      const excDateStr = formatInTimeZone(exception.instanceDate, timezone, "yyyy-MM-dd");
+      // If it was already added (meaning its original date was within the candidates and query window), skip it
+      if (candidates.includes(excDateStr)) {
+        continue;
+      }
+
+      // Check if the override event falls within the query window
+      const overrideStart = exception.overrideEvent.startTime;
+      const overrideEnd = exception.overrideEvent.endTime;
+      const queryStartMs = queryStart.getTime();
+      const queryEndMs = queryEnd.getTime();
+
+      if (overrideStart.getTime() < queryEndMs && overrideEnd.getTime() > queryStartMs) {
+        results.push({
+          id: `${event.id}-${excDateStr}`,
+          title: exception.overrideEvent.title,
+          description: exception.overrideEvent.description,
+          startTime: exception.overrideEvent.startTime.toISOString(),
+          endTime: exception.overrideEvent.endTime.toISOString(),
+          allDay: exception.overrideEvent.allDay,
+          isRecurring: true,
+          recurrence: {
+            frequency: rule.frequency,
+            interval: rule.interval,
+            seriesEndDate: rule.seriesEndDate ? seriesEndStr : null,
+            byDay: rule.byDay as string[] | null,
+          },
+          version: exception.overrideEvent.version,
+        });
+      }
+    }
   }
 
   return results;

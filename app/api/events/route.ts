@@ -52,14 +52,18 @@ export const GET = withErrorHandling(async (request: Request): Promise<Response>
       ],
     },
     include: {
-      recurrenceRule: true,
-      exceptions: {
+      recurrenceRule: {
         include: {
-          overrideEvent: {
+          exceptions: {
             include: {
-              recurrenceRule: true,
+              overrideEvent: true,
             },
           },
+        },
+      },
+      exceptions: {
+        include: {
+          overrideEvent: true,
         },
       },
     },
@@ -69,6 +73,9 @@ export const GET = withErrorHandling(async (request: Request): Promise<Response>
 
   for (const e of dbEvents) {
     if (!e.recurrenceRule) {
+      if (e.exceptions && e.exceptions.length > 0) {
+        continue;
+      }
       results.push({
         id: e.id,
         title: e.title,
@@ -81,7 +88,15 @@ export const GET = withErrorHandling(async (request: Request): Promise<Response>
         version: e.version,
       });
     } else {
-      const expanded = expandEventSeries(e, new Date(start), new Date(end), timezone);
+      const expanded = expandEventSeries(
+        {
+          ...e,
+          exceptions: e.recurrenceRule.exceptions || [],
+        } as any,
+        new Date(start),
+        new Date(end),
+        timezone
+      );
       results.push(...expanded);
     }
   }
