@@ -1,10 +1,10 @@
 import { z } from "zod";
 
-export const withValidation = <T>(
+export const withValidation = <T, A extends unknown[]>(
   schema: z.ZodSchema<T>,
-  handler: (request: Request, body: T, ...args: unknown[]) => Promise<Response>
+  handler: (request: Request, body: T, ...args: A) => Promise<Response>
 ) => {
-  return async (request: Request, ...args: unknown[]): Promise<Response> => {
+  return async (request: Request, ...args: A): Promise<Response> => {
     let body: unknown;
     try {
       body = await request.json();

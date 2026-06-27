@@ -11,10 +11,10 @@ export class VersionConflictError extends Error {
   }
 }
 
-export const withErrorHandling = (
-  handler: (request: Request, ...args: unknown[]) => Promise<Response>
+export const withErrorHandling = <A extends unknown[]>(
+  handler: (request: Request, ...args: A) => Promise<Response>
 ) => {
-  return async (request: Request, ...args: unknown[]): Promise<Response> => {
+  return async (request: Request, ...args: A): Promise<Response> => {
     try {
       return await handler(request, ...args);
     } catch (error: unknown) {
