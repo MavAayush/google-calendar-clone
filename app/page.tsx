@@ -22,7 +22,8 @@ interface CalendarEvent {
 export default function Page() {
   const [view, setView] = useState<"day" | "week" | "month">("week");
   const [currentDate, setCurrentDate] = useState<Date>(new Date("2026-07-01"));
-  const [isCreateModalOpen, setCreateModalOpen] = useState(false);
+  const [isFormOpen, setFormOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const { show: showToast } = useToast();
 
   const startRange = (() => {
@@ -157,7 +158,10 @@ export default function Page() {
       <div className="flex flex-1 overflow-hidden">
         <aside className="w-64 border-r border-[var(--color-border)] bg-[var(--color-surface)] p-6 flex flex-col space-y-6 overflow-y-auto">
           <button
-            onClick={() => setCreateModalOpen(true)}
+            onClick={() => {
+              setEditingEvent(null);
+              setFormOpen(true);
+            }}
             className="flex items-center justify-center space-x-2 rounded-full bg-[var(--color-primary)] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-[var(--color-primary-light)] hover:bg-[var(--color-primary-hover)] transition duration-[var(--transition-fast)] transform hover:-translate-y-0.5"
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
@@ -249,18 +253,34 @@ export default function Page() {
             </div>
           )}
           {view === "month" ? (
-            <MonthGrid currentDate={currentDate} events={data?.events || []} />
+            <MonthGrid
+              currentDate={currentDate}
+              events={data?.events || []}
+              onEventClick={(event) => {
+                setEditingEvent(event);
+                setFormOpen(true);
+              }}
+            />
           ) : (
-            <CalendarGrid view={view} currentDate={currentDate} events={data?.events || []} />
+            <CalendarGrid
+              view={view}
+              currentDate={currentDate}
+              events={data?.events || []}
+              onEventClick={(event) => {
+                setEditingEvent(event);
+                setFormOpen(true);
+              }}
+            />
           )}
         </main>
       </div>
 
-      {isCreateModalOpen && (
+      {isFormOpen && (
         <EventForm
-          isOpen={isCreateModalOpen}
-          onClose={() => setCreateModalOpen(false)}
+          isOpen={isFormOpen}
+          onClose={() => setFormOpen(false)}
           defaultDate={currentDate}
+          event={editingEvent || undefined}
         />
       )}
     </div>

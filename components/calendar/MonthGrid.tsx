@@ -16,11 +16,13 @@ import { CalendarEvent } from "./CalendarGrid";
 interface MonthGridProps {
   currentDate: Date;
   events: CalendarEvent[];
+  onEventClick: (event: CalendarEvent) => void;
 }
 
 export const MonthGrid: React.FC<MonthGridProps> = ({
   currentDate,
   events,
+  onEventClick,
 }) => {
   const start = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 0 });
   const end = endOfWeek(endOfMonth(currentDate), { weekStartsOn: 0 });
@@ -92,6 +94,7 @@ export const MonthGrid: React.FC<MonthGridProps> = ({
                 {visibleEvents.map((event) => (
                   <div
                     key={event.id}
+                    onClick={() => onEventClick(event)}
                     className="px-2 py-1 rounded text-[10px] font-medium bg-[var(--color-primary-light)] border-l-2 border-[var(--color-primary)] text-[var(--color-primary)] truncate cursor-pointer hover:shadow-sm transition select-none"
                     title={event.title}
                   >

@@ -16,12 +16,14 @@ interface CalendarGridProps {
   view: "day" | "week";
   currentDate: Date;
   events: CalendarEvent[];
+  onEventClick: (event: CalendarEvent) => void;
 }
 
 export const CalendarGrid: React.FC<CalendarGridProps> = ({
   view,
   currentDate,
   events,
+  onEventClick,
 }) => {
   const start = startOfWeek(currentDate, { weekStartsOn: 0 });
   const days = view === "day"
@@ -127,6 +129,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                     return (
                       <div
                         key={event.id}
+                        onClick={() => onEventClick(event)}
                         className="absolute p-2 rounded-lg bg-[var(--color-primary-light)] border-l-4 border-[var(--color-primary)] text-[var(--color-primary)] shadow-sm cursor-pointer hover:shadow-md transition-[box-shadow,transform] duration-[var(--transition-fast)] overflow-hidden select-none hover:scale-[1.01]"
                         style={{
                           top: `${top}px`,

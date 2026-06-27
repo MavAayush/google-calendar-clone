@@ -7,41 +7,114 @@ import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { request } from "@/lib/api/request";
 import { toUTC } from "@/lib/date/toUTC";
+import { toLocal } from "@/lib/date/toLocal";
+import { CalendarEvent } from "./CalendarGrid";
 
 interface EventFormProps {
   isOpen: boolean;
   onClose: () => void;
   defaultDate?: Date;
+  event?: CalendarEvent;
 }
 
 export const EventForm: React.FC<EventFormProps> = ({
   isOpen,
   onClose,
   defaultDate = new Date("2026-07-01"),
+  event,
 }) => {
   const queryClient = useQueryClient();
   const { show: showToast } = useToast();
 
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [date, setDate] = useState(format(defaultDate, "yyyy-MM-dd"));
-  const [startTime, setStartTime] = useState("09:00");
-  const [endTime, setEndTime] = useState("10:00");
-  const [allDay, setAllDay] = useState(false);
+  const timezone =
+    process.env.NEXT_PUBLIC_TIMEZONE ||
+    Intl.DateTimeFormat().resolvedOptions().timeZone ||
+    "UTC";
+
+  const initialValues = (() => {
+    if (!event) {
+      return {
+        title: "",
+        description: "",
+        date: format(defaultDate, "yyyy-MM-dd"),
+        startTime: "09:00",
+        endTime: "10:00",
+        allDay: false,
+      };
+    }
+
+    const localStart = toLocal(event.startTime, timezone, event.allDay);
+    const localEnd = toLocal(event.endTime, timezone, event.allDay);
+    const datePart = localStart.split("T")[0];
+    const startPart = localStart.split("T")[1].substring(0, 5);
+    const endPart = localEnd.split("T")[1].substring(0, 5);
+
+    return {
+      title: event.title,
+      description: event.description || "",
+      date: datePart,
+      startTime: startPart,
+      endTime: endPart,
+      allDay: event.allDay,
+    };
+  })();
+
+  const [title, setTitle] = useState(initialValues.title);
+  const [description, setDescription] = useState(initialValues.description);
+  const [date, setDate] = useState(initialValues.date);
+  const [startTime, setStartTime] = useState(initialValues.startTime);
+  const [endTime, setEndTime] = useState(initialValues.endTime);
+  const [allDay, setAllDay] = useState(initialValues.allDay);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const mutation = useMutation<
     { id: string; title: string; conflicts?: { title: string }[] },
     { message?: string; fields?: Record<string, string> },
-    { title: string; description: string | null; startTime: string; endTime: string; allDay: boolean }
+    { title: string; description: string | null; startTime: string; endTime: string; allDay: boolean; version?: number },
+    { previousQueries: [unknown, unknown][] }
   >({
     mutationFn: (payload) => {
-      return request<{ id: string; title: string; conflicts?: { title: string }[] }>("/api/events", {
-        method: "POST",
+      const url = event ? `/api/events/${event.id}` : "/api/events";
+      const method = event ? "PATCH" : "POST";
+      return request<{ id: string; title: string; conflicts?: { title: string }[] }>(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+    },
+    onMutate: async (newEvent) => {
+      await queryClient.cancelQueries({ queryKey: ["events"] });
+      const previousQueries = queryClient.getQueriesData({ queryKey: ["events"] });
+
+      if (event) {
+        queryClient.setQueriesData({ queryKey: ["events"] }, (old: { events: CalendarEvent[] } | undefined) => {
+          if (!old || !old.events) return old;
+          return {
+            ...old,
+            events: old.events.map((e: CalendarEvent) =>
+              e.id === event.id
+                ? { ...e, ...newEvent, version: e.version + 1 }
+                : e
+            ),
+          };
+        });
+      }
+
+      return { previousQueries };
+    },
+    onError: (err, newEvent, context) => {
+      if (context?.previousQueries) {
+        for (const [key, value] of context.previousQueries) {
+          queryClient.setQueryData(key as readonly unknown[], value);
+        }
+      }
+
+      if (err.fields) {
+        setErrors(err.fields);
+      } else {
+        showToast(err.message || "Failed to save event", "error");
+      }
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["events"] });
@@ -49,16 +122,9 @@ export const EventForm: React.FC<EventFormProps> = ({
 
       if (data.conflicts && data.conflicts.length > 0) {
         const conflictTitles = data.conflicts.map((c) => c.title).join(", ");
-        showToast(`⚠️ Created, but overlaps with: ${conflictTitles}`, "warning");
+        showToast(`⚠️ Saved, but overlaps with: ${conflictTitles}`, "warning");
       } else {
-        showToast("Event created successfully", "success");
-      }
-    },
-    onError: (err) => {
-      if (err.fields) {
-        setErrors(err.fields);
-      } else {
-        showToast(err.message || "Failed to create event", "error");
+        showToast(event ? "Event updated successfully" : "Event created successfully", "success");
       }
     },
   });
@@ -80,11 +146,6 @@ export const EventForm: React.FC<EventFormProps> = ({
       return;
     }
 
-    const timezone =
-      process.env.NEXT_PUBLIC_TIMEZONE ||
-      Intl.DateTimeFormat().resolvedOptions().timeZone ||
-      "UTC";
-
     let localStart = `${date}T${startTime}:00.000`;
     let localEnd = `${date}T${endTime}:00.000`;
 
@@ -97,17 +158,30 @@ export const EventForm: React.FC<EventFormProps> = ({
     const startTimeUTC = toUTC(localStart, timezone, allDay);
     const endTimeUTC = toUTC(localEnd, timezone, allDay);
 
-    mutation.mutate({
+    const payload: {
+      title: string;
+      description: string | null;
+      startTime: string;
+      endTime: string;
+      allDay: boolean;
+      version?: number;
+    } = {
       title,
       description: description || null,
       startTime: startTimeUTC,
       endTime: endTimeUTC,
       allDay,
-    });
+    };
+
+    if (event) {
+      payload.version = event.version;
+    }
+
+    mutation.mutate(payload);
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Create Event">
+    <Modal isOpen={isOpen} onClose={onClose} title={event ? "Edit Event" : "Create Event"}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <Input
           label="Title"
