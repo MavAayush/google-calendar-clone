@@ -1,0 +1,24 @@
+import { z } from "zod";
+
+export const withValidation = <T>(
+  schema: z.ZodSchema<T>,
+  handler: (request: Request, body: T, ...args: unknown[]) => Promise<Response>
+) => {
+  return async (request: Request, ...args: unknown[]): Promise<Response> => {
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      throw new z.ZodError([
+        {
+          code: z.ZodIssueCode.custom,
+          path: [],
+          message: "Invalid or empty JSON body",
+        },
+      ]);
+    }
+
+    const parsed = schema.parse(body);
+    return handler(request, parsed, ...args);
+  };
+};
