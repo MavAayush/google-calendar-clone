@@ -31,6 +31,9 @@ export const GET = withErrorHandling(async (request: Request): Promise<Response>
       startTime: { lt: new Date(end) },
       endTime: { gt: new Date(start) },
     },
+    include: {
+      recurrenceRule: true,
+    },
   });
 
   const formattedEvents = events.map((e) => ({
@@ -40,8 +43,15 @@ export const GET = withErrorHandling(async (request: Request): Promise<Response>
     startTime: e.startTime.toISOString(),
     endTime: e.endTime.toISOString(),
     allDay: e.allDay,
-    isRecurring: false,
-    recurrence: null,
+    isRecurring: !!e.recurrenceRule,
+    recurrence: e.recurrenceRule ? {
+      frequency: e.recurrenceRule.frequency,
+      interval: e.recurrenceRule.interval,
+      seriesEndDate: e.recurrenceRule.seriesEndDate
+        ? e.recurrenceRule.seriesEndDate.toISOString().split("T")[0]
+        : null,
+      byDay: e.recurrenceRule.byDay,
+    } : null,
     version: e.version,
   }));
 
@@ -58,6 +68,21 @@ export const POST = withErrorHandling(
       new Date(body.endTime)
     );
 
+    let recurrenceRuleId: string | undefined = undefined;
+
+    if (body.recurrenceRule) {
+      const rec = await prisma.recurrenceRule.create({
+        data: {
+          frequency: body.recurrenceRule.frequency,
+          interval: body.recurrenceRule.interval,
+          seriesStartDate: new Date(body.startTime),
+          seriesEndDate: body.recurrenceRule.seriesEndDate ? new Date(body.recurrenceRule.seriesEndDate) : null,
+          byDay: body.recurrenceRule.byDay || undefined,
+        },
+      });
+      recurrenceRuleId = rec.id;
+    }
+
     const event = await prisma.event.create({
       data: {
         userId,
@@ -66,6 +91,10 @@ export const POST = withErrorHandling(
         startTime: new Date(body.startTime),
         endTime: new Date(body.endTime),
         allDay: body.allDay,
+        recurrenceRuleId,
+      },
+      include: {
+        recurrenceRule: true,
       },
     });
 
@@ -76,8 +105,15 @@ export const POST = withErrorHandling(
       startTime: event.startTime.toISOString(),
       endTime: event.endTime.toISOString(),
       allDay: event.allDay,
-      isRecurring: false,
-      recurrence: null,
+      isRecurring: !!event.recurrenceRule,
+      recurrence: event.recurrenceRule ? {
+        frequency: event.recurrenceRule.frequency,
+        interval: event.recurrenceRule.interval,
+        seriesEndDate: event.recurrenceRule.seriesEndDate
+          ? event.recurrenceRule.seriesEndDate.toISOString().split("T")[0]
+          : null,
+        byDay: event.recurrenceRule.byDay,
+      } : null,
       version: event.version,
       conflicts,
     };

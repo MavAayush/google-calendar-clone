@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { recurrenceInputSchema } from "./recurrence";
 
 export const eventInputObjectSchema = z.object({
   title: z.string().min(1).max(255),
@@ -6,6 +7,7 @@ export const eventInputObjectSchema = z.object({
   startTime: z.string().datetime(),
   endTime: z.string().datetime(),
   allDay: z.boolean().default(false),
+  recurrenceRule: recurrenceInputSchema.nullable().optional(),
 });
 
 export const eventInputSchema = eventInputObjectSchema.refine(

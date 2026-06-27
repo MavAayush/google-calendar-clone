@@ -17,6 +17,13 @@ interface CalendarEvent {
   startTime: string;
   endTime: string;
   allDay: boolean;
+  isRecurring: boolean;
+  recurrence: {
+    frequency: "DAILY" | "WEEKLY" | "MONTHLY";
+    interval: number;
+    seriesEndDate: string | null;
+    byDay: string[] | null;
+  } | null;
   version: number;
 }
 
