@@ -138,6 +138,22 @@ export default function Page() {
     });
   };
 
+  const handleEventResize = (event: CalendarEvent, newEnd: Date) => {
+    const timezone =
+      process.env.NEXT_PUBLIC_TIMEZONE ||
+      Intl.DateTimeFormat().resolvedOptions().timeZone ||
+      "UTC";
+
+    const localEndStr = format(newEnd, "yyyy-MM-dd'T'HH:mm:ss.SSS");
+    const endTimeUTC = toUTC(localEndStr, timezone, event.allDay);
+
+    moveEventMutation.mutate({
+      event,
+      startTime: event.startTime,
+      endTime: endTimeUTC,
+    });
+  };
+
   const handlePrev = () => {
     if (view === "day") {
       setCurrentDate(subDays(currentDate, 1));
@@ -346,6 +362,7 @@ export default function Page() {
                 setFormOpen(true);
               }}
               onEventMove={handleEventMove}
+              onEventResize={handleEventResize}
             />
           )}
         </main>

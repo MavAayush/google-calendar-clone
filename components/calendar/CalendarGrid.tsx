@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useRef } from "react";
 import { startOfWeek, addDays, format, startOfDay, endOfDay } from "date-fns";
 import { computeEventLayout } from "@/lib/date/layout";
 
@@ -18,6 +18,7 @@ interface CalendarGridProps {
   events: CalendarEvent[];
   onEventClick: (event: CalendarEvent) => void;
   onEventMove: (event: CalendarEvent, newStart: Date, newEnd: Date) => void;
+  onEventResize: (event: CalendarEvent, newEnd: Date) => void;
 }
 
 export const CalendarGrid: React.FC<CalendarGridProps> = ({
@@ -26,6 +27,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
   events,
   onEventClick,
   onEventMove,
+  onEventResize,
 }) => {
   const start = startOfWeek(currentDate, { weekStartsOn: 0 });
   const days = view === "day"
@@ -33,6 +35,14 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
     : Array.from({ length: 7 }, (_, i) => addDays(start, i));
 
   const hours = Array.from({ length: 24 }, (_, i) => i);
+
+  const [resizing, setResizing] = useState<{
+    id: string;
+    tempTop: number;
+    tempHeight: number;
+    isTop: boolean;
+  } | null>(null);
+  const ignoreNextClickRef = useRef(false);
 
   const formatHour = (hour: number) => {
     if (hour === 0) return "12 AM";
@@ -61,6 +71,79 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
     const newEnd = new Date(newStart.getTime() + durationMs);
 
     onEventMove(draggedEvent, newStart, newEnd);
+  };
+
+  const handleResizeStart = (
+    e: React.MouseEvent<HTMLDivElement>,
+    event: CalendarEvent,
+    originalTop: number,
+    originalHeight: number,
+    isTop: boolean
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    ignoreNextClickRef.current = false;
+
+    const startY = e.clientY;
+    const startTop = originalTop;
+    const startHeight = originalHeight;
+    const startTime = new Date(event.startTime);
+    const endTime = new Date(event.endTime);
+
+    const card = document.getElementById(`event-card-${event.id}`);
+    if (card) card.setAttribute("draggable", "false");
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      ignoreNextClickRef.current = true;
+      const deltaY = moveEvent.clientY - startY;
+
+      if (isTop) {
+        const tempHeight = Math.max(15, startHeight - deltaY);
+        const tempTop = startTop + (startHeight - tempHeight);
+        setResizing({ id: event.id, tempTop, tempHeight, isTop: true });
+      } else {
+        const tempHeight = Math.max(15, startHeight + deltaY);
+        setResizing({ id: event.id, tempTop: startTop, tempHeight, isTop: false });
+      }
+    };
+
+    const handleMouseUp = (upEvent: MouseEvent) => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+
+      const deltaY = upEvent.clientY - startY;
+      const card = document.getElementById(`event-card-${event.id}`);
+      if (card) card.setAttribute("draggable", "true");
+
+      if (ignoreNextClickRef.current) {
+        setTimeout(() => {
+          ignoreNextClickRef.current = false;
+        }, 100);
+      }
+
+      setResizing(null);
+
+      if (isTop) {
+        const newDurationMinutes = Math.max(15, startHeight - deltaY);
+        const roundedMinutes = Math.round(newDurationMinutes / 15) * 15;
+        const newStart = new Date(endTime.getTime() - roundedMinutes * 60 * 1000);
+
+        if (newStart.getTime() !== startTime.getTime()) {
+          onEventMove(event, newStart, endTime);
+        }
+      } else {
+        const newDurationMinutes = Math.max(15, startHeight + deltaY);
+        const roundedMinutes = Math.round(newDurationMinutes / 15) * 15;
+        const newEnd = new Date(startTime.getTime() + roundedMinutes * 60 * 1000);
+
+        if (newEnd.getTime() !== endTime.getTime()) {
+          onEventResize(event, newEnd);
+        }
+      }
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
   };
 
   return (
@@ -150,15 +233,39 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                     const startOffset = Math.max(0, (eStart.getTime() - dayStart.getTime()) / (1000 * 60 * 60));
                     const endOffset = Math.min(24, (eEnd.getTime() - dayStart.getTime()) / (1000 * 60 * 60));
 
-                    const top = startOffset * 60;
-                    const height = Math.max(24, (endOffset - startOffset) * 60);
+                    const originalTop = startOffset * 60;
+                    const originalHeight = Math.max(24, (endOffset - startOffset) * 60);
+
+                    const isResizingThis = resizing && resizing.id === event.id;
+                    const top = isResizingThis ? resizing.tempTop : originalTop;
+                    const height = isResizingThis ? resizing.tempHeight : originalHeight;
+
+                    let eStartToRender = eStart;
+                    let eEndToRender = eEnd;
+
+                    if (isResizingThis) {
+                      const roundedTempMinutes = Math.round(resizing.tempHeight / 15) * 15;
+                      if (resizing.isTop) {
+                        eStartToRender = new Date(eEnd.getTime() - roundedTempMinutes * 60 * 1000);
+                      } else {
+                        eEndToRender = new Date(eStart.getTime() + roundedTempMinutes * 60 * 1000);
+                      }
+                    }
 
                     return (
                       <div
                         key={event.id}
+                        id={`event-card-${event.id}`}
                         draggable={true}
                         onDragStart={(e) => e.dataTransfer.setData("text/plain", event.id)}
-                        onClick={() => onEventClick(event)}
+                        onClick={(e) => {
+                          if (ignoreNextClickRef.current) {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            return;
+                          }
+                          onEventClick(event);
+                        }}
                         className="absolute p-2 rounded-lg bg-[var(--color-primary-light)] border-l-4 border-[var(--color-primary)] text-[var(--color-primary)] shadow-sm cursor-pointer hover:shadow-md transition-[box-shadow,transform] duration-[var(--transition-fast)] overflow-hidden select-none hover:scale-[1.01] active:opacity-60"
                         style={{
                           top: `${top}px`,
@@ -167,14 +274,42 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                           width: `${layout.width - 1}%`,
                         }}
                       >
+                        <div
+                          className="absolute top-0 left-0 right-0 h-3 cursor-n-resize hover:bg-black/10 transition-colors select-none z-20"
+                          onMouseDown={(e) => handleResizeStart(e, event, originalTop, originalHeight, true)}
+                          onMouseEnter={(e) => {
+                            const cardEl = e.currentTarget.closest("[draggable]");
+                            if (cardEl) cardEl.setAttribute("draggable", "false");
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!resizing) {
+                              const cardEl = e.currentTarget.closest("[draggable]");
+                              if (cardEl) cardEl.setAttribute("draggable", "true");
+                            }
+                          }}
+                        />
                         <div className="font-semibold text-xs truncate leading-tight">
                           {event.title}
                         </div>
                         {height >= 40 && (
                           <div className="text-[10px] opacity-80 mt-0.5 truncate">
-                            {format(eStart, "h:mm a")} - {format(eEnd, "h:mm a")}
+                            {format(eStartToRender, "h:mm a")} - {format(eEndToRender, "h:mm a")}
                           </div>
                         )}
+                        <div
+                          className="absolute bottom-0 left-0 right-0 h-3 cursor-s-resize hover:bg-black/10 transition-colors select-none z-20"
+                          onMouseDown={(e) => handleResizeStart(e, event, originalTop, originalHeight, false)}
+                          onMouseEnter={(e) => {
+                            const cardEl = e.currentTarget.closest("[draggable]");
+                            if (cardEl) cardEl.setAttribute("draggable", "false");
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!resizing) {
+                              const cardEl = e.currentTarget.closest("[draggable]");
+                              if (cardEl) cardEl.setAttribute("draggable", "true");
+                            }
+                          }}
+                        />
                       </div>
                     );
                   })}
