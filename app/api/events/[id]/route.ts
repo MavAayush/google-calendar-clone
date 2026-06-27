@@ -6,6 +6,7 @@ import { eventInputObjectSchema } from "@/lib/validation/event";
 import { getCurrentUserId } from "@/lib/auth";
 import prisma from "@/lib/db/client";
 import { Prisma } from "@prisma/client";
+import { findConflictingEvents } from "@/lib/db/conflicts";
 
 const patchEventInputSchema = eventInputObjectSchema
   .partial()
@@ -25,8 +26,6 @@ const patchEventInputSchema = eventInputObjectSchema
     }
   );
 
-import { findConflictingEvents } from "@/lib/db/conflicts";
-
 type PatchEventInput = z.infer<typeof patchEventInputSchema>;
 
 export const GET = withErrorHandling(
@@ -36,6 +35,9 @@ export const GET = withErrorHandling(
 
     const event = await prisma.event.findUnique({
       where: { id },
+      include: {
+        recurrenceRule: true,
+      },
     });
 
     if (!event || event.userId !== userId) {
@@ -52,8 +54,15 @@ export const GET = withErrorHandling(
       startTime: event.startTime.toISOString(),
       endTime: event.endTime.toISOString(),
       allDay: event.allDay,
-      isRecurring: false,
-      recurrence: null,
+      isRecurring: !!event.recurrenceRule,
+      recurrence: event.recurrenceRule ? {
+        frequency: event.recurrenceRule.frequency,
+        interval: event.recurrenceRule.interval,
+        seriesEndDate: event.recurrenceRule.seriesEndDate
+          ? event.recurrenceRule.seriesEndDate.toISOString().split("T")[0]
+          : null,
+        byDay: event.recurrenceRule.byDay,
+      } : null,
       version: event.version,
     };
 
@@ -70,6 +79,9 @@ export const PATCH = withErrorHandling(
 
       const existing = await prisma.event.findUnique({
         where: { id },
+        include: {
+          recurrenceRule: true,
+        },
       });
 
       if (!existing || existing.userId !== userId) {
@@ -77,6 +89,10 @@ export const PATCH = withErrorHandling(
           code: "P2025",
           clientVersion: "7.8.0",
         });
+      }
+
+      if (body.version !== undefined && existing.version !== body.version) {
+        throw new VersionConflictError();
       }
 
       const finalStart = body.startTime ? new Date(body.startTime) : existing.startTime;
@@ -89,28 +105,55 @@ export const PATCH = withErrorHandling(
         id
       );
 
-      const result = await prisma.event.updateMany({
-        where: {
-          id,
-          userId,
-          version: body.version,
-        },
+      let recurrenceRuleId: string | null | undefined = undefined;
+
+      if (body.recurrenceRule === null) {
+        if (existing.recurrenceRuleId) {
+          await prisma.recurrenceRule.delete({
+            where: { id: existing.recurrenceRuleId },
+          });
+        }
+        recurrenceRuleId = null;
+      } else if (body.recurrenceRule) {
+        if (existing.recurrenceRuleId) {
+          await prisma.recurrenceRule.update({
+            where: { id: existing.recurrenceRuleId },
+            data: {
+              frequency: body.recurrenceRule.frequency,
+              interval: body.recurrenceRule.interval,
+              seriesStartDate: finalStart,
+              seriesEndDate: body.recurrenceRule.seriesEndDate ? new Date(body.recurrenceRule.seriesEndDate) : null,
+              byDay: body.recurrenceRule.byDay || Prisma.JsonNull,
+            },
+          });
+        } else {
+          const rec = await prisma.recurrenceRule.create({
+            data: {
+              frequency: body.recurrenceRule.frequency,
+              interval: body.recurrenceRule.interval,
+              seriesStartDate: finalStart,
+              seriesEndDate: body.recurrenceRule.seriesEndDate ? new Date(body.recurrenceRule.seriesEndDate) : null,
+              byDay: body.recurrenceRule.byDay || undefined,
+            },
+          });
+          recurrenceRuleId = rec.id;
+        }
+      }
+
+      const event = await prisma.event.update({
+        where: { id },
         data: {
           title: body.title,
           description: body.description,
           startTime: body.startTime ? new Date(body.startTime) : undefined,
           endTime: body.endTime ? new Date(body.endTime) : undefined,
           allDay: body.allDay,
+          recurrenceRuleId: recurrenceRuleId !== undefined ? recurrenceRuleId : undefined,
           version: { increment: 1 },
         },
-      });
-
-      if (result.count === 0) {
-        throw new VersionConflictError();
-      }
-
-      const event = await prisma.event.findUniqueOrThrow({
-        where: { id },
+        include: {
+          recurrenceRule: true,
+        },
       });
 
       const formattedEvent = {
@@ -120,8 +163,15 @@ export const PATCH = withErrorHandling(
         startTime: event.startTime.toISOString(),
         endTime: event.endTime.toISOString(),
         allDay: event.allDay,
-        isRecurring: false,
-        recurrence: null,
+        isRecurring: !!event.recurrenceRule,
+        recurrence: event.recurrenceRule ? {
+          frequency: event.recurrenceRule.frequency,
+          interval: event.recurrenceRule.interval,
+          seriesEndDate: event.recurrenceRule.seriesEndDate
+            ? event.recurrenceRule.seriesEndDate.toISOString().split("T")[0]
+            : null,
+          byDay: event.recurrenceRule.byDay,
+        } : null,
         version: event.version,
         conflicts,
       };
