@@ -1,61 +1,64 @@
 "use client";
 
-import React, { useState } from "react";
-import { format, addDays, subDays } from "date-fns";
-import { CalendarGrid, CalendarEvent } from "@/components/calendar/CalendarGrid";
+import React, { useState, useEffect } from "react";
+import { format, addDays, subDays, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from "date-fns";
+import { useQuery } from "@tanstack/react-query";
+import { CalendarGrid } from "@/components/calendar/CalendarGrid";
 import { MonthGrid } from "@/components/calendar/MonthGrid";
+import { request } from "@/lib/api/request";
+import { useToast } from "@/components/ui/Toast";
 
-const mockEvents: CalendarEvent[] = [
-  {
-    id: "mock-1",
-    title: "Sprint Planning",
-    description: "Align on next sprint goals",
-    startTime: "2026-07-01T10:00:00Z",
-    endTime: "2026-07-01T11:00:00Z",
-    allDay: false,
-    version: 1,
-  },
-  {
-    id: "mock-2",
-    title: "Design Sync",
-    description: "Review new design tokens",
-    startTime: "2026-07-01T10:30:00Z",
-    endTime: "2026-07-01T11:30:00Z",
-    allDay: false,
-    version: 1,
-  },
-  {
-    id: "mock-3",
-    title: "Tech Spec Review",
-    description: "Review event layout math spec",
-    startTime: "2026-07-01T11:00:00Z",
-    endTime: "2026-07-01T12:00:00Z",
-    allDay: false,
-    version: 1,
-  },
-  {
-    id: "mock-4",
-    title: "Lunch Break",
-    description: "Standalone lunch event",
-    startTime: "2026-07-01T12:30:00Z",
-    endTime: "2026-07-01T13:30:00Z",
-    allDay: false,
-    version: 1,
-  },
-  {
-    id: "mock-5",
-    title: "Prisma & Neon Session",
-    description: "Verify DB adapters",
-    startTime: "2026-07-02T14:00:00Z",
-    endTime: "2026-07-02T15:30:00Z",
-    allDay: false,
-    version: 1,
-  },
-];
+interface CalendarEvent {
+  id: string;
+  title: string;
+  description: string | null;
+  startTime: string;
+  endTime: string;
+  allDay: boolean;
+  version: number;
+}
 
 export default function Page() {
   const [view, setView] = useState<"day" | "week" | "month">("week");
   const [currentDate, setCurrentDate] = useState<Date>(new Date("2026-07-01"));
+  const { show: showToast } = useToast();
+
+  const startRange = (() => {
+    if (view === "day") {
+      return startOfDay(currentDate);
+    } else if (view === "week") {
+      return startOfDay(startOfWeek(currentDate, { weekStartsOn: 0 }));
+    } else {
+      return startOfDay(startOfWeek(startOfMonth(currentDate), { weekStartsOn: 0 }));
+    }
+  })();
+
+  const endRange = (() => {
+    if (view === "day") {
+      return endOfDay(currentDate);
+    } else if (view === "week") {
+      return endOfDay(addDays(startOfWeek(currentDate, { weekStartsOn: 0 }), 6));
+    } else {
+      return endOfDay(endOfWeek(endOfMonth(currentDate), { weekStartsOn: 0 }));
+    }
+  })();
+
+  const { data, isLoading, error, isError } = useQuery({
+    queryKey: ["events", view, startRange.toISOString(), endRange.toISOString()],
+    queryFn: () => {
+      const params = new URLSearchParams({
+        start: startRange.toISOString(),
+        end: endRange.toISOString(),
+      });
+      return request<{ events: CalendarEvent[] }>(`/api/events?${params.toString()}`);
+    },
+  });
+
+  useEffect(() => {
+    if (isError && error) {
+      showToast(error.message || "Failed to load events", "error");
+    }
+  }, [isError, error, showToast]);
 
   const handlePrev = () => {
     if (view === "day") {
@@ -230,11 +233,20 @@ export default function Page() {
           </div>
         </aside>
 
-        <main className="flex-1 p-6 flex overflow-hidden">
+        <main className="flex-1 p-6 flex overflow-hidden relative">
+          {isLoading && (
+            <div className="absolute inset-0 bg-slate-50/50 backdrop-blur-[1px] flex items-center justify-center z-50">
+              <div className="flex flex-col space-y-4 w-80 p-6 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg">
+                <div className="h-6 bg-slate-200 rounded animate-pulse w-3/4"></div>
+                <div className="h-4 bg-slate-200 rounded animate-pulse w-full"></div>
+                <div className="h-4 bg-slate-200 rounded animate-pulse w-5/6"></div>
+              </div>
+            </div>
+          )}
           {view === "month" ? (
-            <MonthGrid currentDate={currentDate} events={mockEvents} />
+            <MonthGrid currentDate={currentDate} events={data?.events || []} />
           ) : (
-            <CalendarGrid view={view} currentDate={currentDate} events={mockEvents} />
+            <CalendarGrid view={view} currentDate={currentDate} events={data?.events || []} />
           )}
         </main>
       </div>
