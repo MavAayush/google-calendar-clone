@@ -7,6 +7,7 @@ import { CalendarGrid } from "@/components/calendar/CalendarGrid";
 import { MonthGrid } from "@/components/calendar/MonthGrid";
 import { EventForm } from "@/components/calendar/EventForm";
 import { request } from "@/lib/api/request";
+import { EditScopePrompt } from "@/components/calendar/EditScopePrompt";
 import { useToast } from "@/components/ui/Toast";
 import { toUTC } from "@/lib/date/toUTC";
 
@@ -34,6 +35,12 @@ export default function Page() {
   const [currentDate, setCurrentDate] = useState<Date>(new Date("2026-07-01"));
   const [isFormOpen, setFormOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
+  const [pendingRecurrenceAction, setPendingRecurrenceAction] = useState<{
+    type: "move" | "resize";
+    event: CalendarEvent;
+    newStart?: Date;
+    newEnd: Date;
+  } | null>(null);
   const { show: showToast } = useToast();
 
   const startRange = (() => {
@@ -76,10 +83,16 @@ export default function Page() {
   const moveEventMutation = useMutation<
     { id: string; title: string; conflicts?: { title: string }[] },
     { message?: string },
-    { event: CalendarEvent; startTime: string; endTime: string },
+    {
+      event: CalendarEvent;
+      startTime: string;
+      endTime: string;
+      editScope?: "THIS" | "THIS_AND_FOLLOWING" | "ALL";
+      instanceDate?: string;
+    },
     { previousQueries: [unknown, unknown][] }
   >({
-    mutationFn: ({ event, startTime, endTime }) => {
+    mutationFn: ({ event, startTime, endTime, editScope, instanceDate }) => {
       return request<{ id: string; title: string; conflicts?: { title: string }[] }>(`/api/events/${event.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -87,6 +100,8 @@ export default function Page() {
           version: event.version,
           startTime,
           endTime,
+          editScope,
+          instanceDate,
         }),
       });
     },
@@ -127,7 +142,12 @@ export default function Page() {
     },
   });
 
-  const handleEventMove = (event: CalendarEvent, newStart: Date, newEnd: Date) => {
+  const executeEventMove = (
+    event: CalendarEvent,
+    newStart: Date,
+    newEnd: Date,
+    editScope?: "THIS" | "THIS_AND_FOLLOWING" | "ALL"
+  ) => {
     const timezone =
       process.env.NEXT_PUBLIC_TIMEZONE ||
       Intl.DateTimeFormat().resolvedOptions().timeZone ||
@@ -139,14 +159,25 @@ export default function Page() {
     const startTimeUTC = toUTC(localStartStr, timezone, event.allDay);
     const endTimeUTC = toUTC(localEndStr, timezone, event.allDay);
 
+    let instanceDate: string | undefined = undefined;
+    if (event.isRecurring) {
+      instanceDate = event.id.slice(-10);
+    }
+
     moveEventMutation.mutate({
       event,
       startTime: startTimeUTC,
       endTime: endTimeUTC,
+      editScope,
+      instanceDate,
     });
   };
 
-  const handleEventResize = (event: CalendarEvent, newEnd: Date) => {
+  const executeEventResize = (
+    event: CalendarEvent,
+    newEnd: Date,
+    editScope?: "THIS" | "THIS_AND_FOLLOWING" | "ALL"
+  ) => {
     const timezone =
       process.env.NEXT_PUBLIC_TIMEZONE ||
       Intl.DateTimeFormat().resolvedOptions().timeZone ||
@@ -155,11 +186,34 @@ export default function Page() {
     const localEndStr = format(newEnd, "yyyy-MM-dd'T'HH:mm:ss.SSS");
     const endTimeUTC = toUTC(localEndStr, timezone, event.allDay);
 
+    let instanceDate: string | undefined = undefined;
+    if (event.isRecurring) {
+      instanceDate = event.id.slice(-10);
+    }
+
     moveEventMutation.mutate({
       event,
       startTime: event.startTime,
       endTime: endTimeUTC,
+      editScope,
+      instanceDate,
     });
+  };
+
+  const handleEventMove = (event: CalendarEvent, newStart: Date, newEnd: Date) => {
+    if (event.isRecurring) {
+      setPendingRecurrenceAction({ type: "move", event, newStart, newEnd });
+    } else {
+      executeEventMove(event, newStart, newEnd);
+    }
+  };
+
+  const handleEventResize = (event: CalendarEvent, newEnd: Date) => {
+    if (event.isRecurring) {
+      setPendingRecurrenceAction({ type: "resize", event, newEnd });
+    } else {
+      executeEventResize(event, newEnd);
+    }
   };
 
   const handlePrev = () => {
@@ -389,6 +443,31 @@ export default function Page() {
         defaultDate={currentDate}
         event={editingEvent || undefined}
       />
+
+      {pendingRecurrenceAction && (
+        <EditScopePrompt
+          isOpen={!!pendingRecurrenceAction}
+          onClose={() => setPendingRecurrenceAction(null)}
+          onConfirm={(scope) => {
+            if (pendingRecurrenceAction.type === "move") {
+              executeEventMove(
+                pendingRecurrenceAction.event,
+                pendingRecurrenceAction.newStart!,
+                pendingRecurrenceAction.newEnd,
+                scope
+              );
+            } else {
+              executeEventResize(
+                pendingRecurrenceAction.event,
+                pendingRecurrenceAction.newEnd,
+                scope
+              );
+            }
+            setPendingRecurrenceAction(null);
+          }}
+          actionType="edit"
+        />
+      )}
     </div>
   );
 }

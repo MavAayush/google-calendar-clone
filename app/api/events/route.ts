@@ -6,7 +6,7 @@ import { eventInputSchema, EventInput } from "@/lib/validation/event";
 import { getCurrentUserId } from "@/lib/auth";
 import prisma from "@/lib/db/client";
 import { findConflictingEvents } from "@/lib/db/conflicts";
-import { expandEventSeries, ExpandedInstance } from "@/lib/recurrence/expand";
+import { expandEventSeries, ExpandedInstance, EventWithRecurrence } from "@/lib/recurrence/expand";
 
 const getEventsQuerySchema = z.object({
   start: z.string().datetime(),
@@ -92,7 +92,7 @@ export const GET = withErrorHandling(async (request: Request): Promise<Response>
         {
           ...e,
           exceptions: e.recurrenceRule.exceptions || [],
-        } as any,
+        } as EventWithRecurrence,
         new Date(start),
         new Date(end),
         timezone

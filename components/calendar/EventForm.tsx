@@ -10,6 +10,7 @@ import { toUTC } from "@/lib/date/toUTC";
 import { toLocal } from "@/lib/date/toLocal";
 import { recurrenceInputSchema } from "@/lib/validation/recurrence";
 import { CalendarEvent } from "./CalendarGrid";
+import { EditScopePrompt } from "./EditScopePrompt";
 
 interface EventFormProps {
   isOpen: boolean;
@@ -87,6 +88,23 @@ export const EventForm: React.FC<EventFormProps> = ({
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  const [scopePromptOpen, setScopePromptOpen] = useState(false);
+  const [deletePromptOpen, setDeletePromptOpen] = useState(false);
+  const [pendingPayload, setPendingPayload] = useState<{
+    title: string;
+    description: string | null;
+    startTime: string;
+    endTime: string;
+    allDay: boolean;
+    recurrenceRule?: {
+      frequency: "DAILY" | "WEEKLY" | "MONTHLY";
+      interval: number;
+      seriesEndDate: string | null;
+      byDay: string[] | null;
+    } | null;
+    version?: number;
+  } | null>(null);
+
   /* eslint-disable react-hooks/set-state-in-effect */
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
@@ -103,6 +121,9 @@ export const EventForm: React.FC<EventFormProps> = ({
       setEndsType(initialValues.endsType);
       setEndsOnDate(initialValues.endsOnDate);
       setErrors({});
+      setScopePromptOpen(false);
+      setDeletePromptOpen(false);
+      setPendingPayload(null);
     }
   }, [isOpen, event, defaultDate]);
   /* eslint-enable react-hooks/set-state-in-effect */
@@ -111,7 +132,22 @@ export const EventForm: React.FC<EventFormProps> = ({
   const mutation = useMutation<
     { id: string; title: string; conflicts?: { title: string }[] },
     { message?: string; fields?: Record<string, string> },
-    { title: string; description: string | null; startTime: string; endTime: string; allDay: boolean; version?: number },
+    {
+      title: string;
+      description: string | null;
+      startTime: string;
+      endTime: string;
+      allDay: boolean;
+      recurrenceRule?: {
+        frequency: "DAILY" | "WEEKLY" | "MONTHLY";
+        interval: number;
+        seriesEndDate: string | null;
+        byDay: string[] | null;
+      } | null;
+      version?: number;
+      editScope?: "THIS" | "THIS_AND_FOLLOWING" | "ALL";
+      instanceDate?: string;
+    },
     { previousQueries: [unknown, unknown][] }
   >({
     mutationFn: (payload) => {
@@ -168,6 +204,43 @@ export const EventForm: React.FC<EventFormProps> = ({
       }
     },
   });
+
+  const deleteMutation = useMutation<
+    void,
+    { message?: string },
+    { editScope?: "THIS" | "THIS_AND_FOLLOWING" | "ALL"; instanceDate?: string }
+  >({
+    mutationFn: (params) => {
+      const urlParams = new URLSearchParams();
+      if (params.editScope) urlParams.append("editScope", params.editScope);
+      if (params.instanceDate) urlParams.append("instanceDate", params.instanceDate);
+      
+      const queryStr = urlParams.toString();
+      const url = `/api/events/${event!.id}${queryStr ? `?${queryStr}` : ""}`;
+      
+      return request<void>(url, {
+        method: "DELETE",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["events"] });
+      showToast("Event deleted successfully", "success");
+      onClose();
+    },
+    onError: (err) => {
+      showToast(err.message || "Failed to delete event", "error");
+    },
+  });
+
+  const handleDeleteClick = () => {
+    if (event?.isRecurring) {
+      setDeletePromptOpen(true);
+    } else {
+      if (window.confirm("Are you sure you want to delete this event?")) {
+        deleteMutation.mutate({});
+      }
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -255,7 +328,12 @@ export const EventForm: React.FC<EventFormProps> = ({
       payload.version = event.version;
     }
 
-    mutation.mutate(payload);
+    if (event && event.isRecurring) {
+      setPendingPayload(payload);
+      setScopePromptOpen(true);
+    } else {
+      mutation.mutate(payload);
+    }
   };
 
   return (
@@ -422,15 +500,66 @@ export const EventForm: React.FC<EventFormProps> = ({
           </>
         )}
 
-        <div className="flex justify-end space-x-3 pt-4 border-t border-[var(--color-border)]">
-          <Button type="button" variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" loading={mutation.isPending}>
-            Save
-          </Button>
+        <div className="flex justify-between items-center pt-4 border-t border-[var(--color-border)]">
+          {event ? (
+            <Button
+              type="button"
+              variant="danger"
+              onClick={handleDeleteClick}
+              loading={deleteMutation.isPending}
+            >
+              Delete
+            </Button>
+          ) : (
+            <div />
+          )}
+          <div className="flex space-x-3">
+            <Button type="button" variant="secondary" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" loading={mutation.isPending}>
+              Save
+            </Button>
+          </div>
         </div>
       </form>
+
+      {scopePromptOpen && (
+        <EditScopePrompt
+          isOpen={scopePromptOpen}
+          onClose={() => {
+            setScopePromptOpen(false);
+            setPendingPayload(null);
+          }}
+          onConfirm={(scope) => {
+            setScopePromptOpen(false);
+            if (pendingPayload) {
+              mutation.mutate({
+                ...pendingPayload,
+                editScope: scope,
+                instanceDate: initialValues.date,
+              });
+            }
+            setPendingPayload(null);
+          }}
+          actionType="edit"
+        />
+      )}
+
+      {deletePromptOpen && (
+        <EditScopePrompt
+          isOpen={deletePromptOpen}
+          onClose={() => setDeletePromptOpen(false)}
+          onConfirm={(scope) => {
+            setDeletePromptOpen(false);
+            deleteMutation.mutate({
+              editScope: scope,
+              instanceDate: initialValues.date,
+            });
+          }}
+          actionType="delete"
+        />
+      )}
     </Modal>
   );
 };
