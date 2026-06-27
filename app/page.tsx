@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { format, addDays, subDays, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from "date-fns";
+import { format, addDays, subDays, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
 import { useQuery, useMutation, useQueryClient, useIsMutating } from "@tanstack/react-query";
 import { CalendarGrid } from "@/components/calendar/CalendarGrid";
 import { MonthGrid } from "@/components/calendar/MonthGrid";
@@ -232,22 +232,38 @@ export default function Page() {
   const handlePrev = () => {
     if (view === "day") {
       setCurrentDate(subDays(currentDate, 1));
-    } else {
+    } else if (view === "week") {
       setCurrentDate(subDays(currentDate, 7));
+    } else {
+      setCurrentDate(subMonths(currentDate, 1));
     }
   };
 
   const handleNext = () => {
     if (view === "day") {
       setCurrentDate(addDays(currentDate, 1));
-    } else {
+    } else if (view === "week") {
       setCurrentDate(addDays(currentDate, 7));
+    } else {
+      setCurrentDate(addMonths(currentDate, 1));
     }
   };
 
   const handleToday = () => {
     setCurrentDate(new Date());
   };
+
+  const miniCalendarDays = (() => {
+    const start = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 0 });
+    const end = endOfWeek(endOfMonth(currentDate), { weekStartsOn: 0 });
+    const daysList: Date[] = [];
+    let day = start;
+    while (day <= end) {
+      daysList.push(day);
+      day = addDays(day, 1);
+    }
+    return daysList;
+  })();
 
   if (sessionPending) {
     return (
@@ -412,14 +428,24 @@ export default function Page() {
 
           <div className="border border-[var(--color-border)] rounded-xl bg-[var(--color-bg-app)]" style={{ padding: "16px" }}>
             <div className="flex items-center justify-between" style={{ marginBottom: "12px" }}>
-              <span className="text-sm font-semibold text-[var(--color-text-main)]">July 2026</span>
+              <span className="text-sm font-semibold text-[var(--color-text-main)]">
+                {format(currentDate, "MMMM yyyy")}
+              </span>
               <div className="flex" style={{ gap: "4px" }}>
-                <button className="p-1 rounded hover:bg-[var(--color-surface)] text-[var(--color-text-muted)] transition">
+                <button
+                  onClick={() => setCurrentDate(subMonths(currentDate, 1))}
+                  className="p-1 rounded hover:bg-[var(--color-surface)] text-[var(--color-text-muted)] transition cursor-pointer"
+                  style={{ border: "none", background: "none" }}
+                >
                   <svg style={{ width: "14px", height: "14px" }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
-                <button className="p-1 rounded hover:bg-[var(--color-surface)] text-[var(--color-text-muted)] transition">
+                <button
+                  onClick={() => setCurrentDate(addMonths(currentDate, 1))}
+                  className="p-1 rounded hover:bg-[var(--color-surface)] text-[var(--color-text-muted)] transition cursor-pointer"
+                  style={{ border: "none", background: "none" }}
+                >
                   <svg style={{ width: "14px", height: "14px" }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                   </svg>
@@ -431,25 +457,44 @@ export default function Page() {
               style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", rowGap: "8px" }}
             >
               <div>S</div><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div>
-              {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
-                <div
-                  key={day}
-                  className={`rounded-full text-center transition cursor-pointer hover:bg-[var(--color-surface)]`}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: "28px",
-                    height: "28px",
-                    margin: "0 auto",
-                    fontSize: "11px",
-                    backgroundColor: day === 27 ? "var(--color-primary)" : undefined,
-                    color: day === 27 ? "#FFFFFF" : "var(--color-text-main)",
-                  }}
-                >
-                  {day}
-                </div>
-              ))}
+              {miniCalendarDays.map((day) => {
+                const isCurrentMonth = day.getMonth() === currentDate.getMonth();
+                const isSelected = format(day, "yyyy-MM-dd") === format(currentDate, "yyyy-MM-dd");
+                const isToday = format(day, "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd");
+
+                return (
+                  <button
+                    key={day.toISOString()}
+                    onClick={() => setCurrentDate(day)}
+                    className="rounded-full text-center transition cursor-pointer hover:bg-[var(--color-surface)]"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: "28px",
+                      height: "28px",
+                      margin: "0 auto",
+                      fontSize: "11px",
+                      border: "none",
+                      backgroundColor: isSelected
+                        ? "var(--color-primary)"
+                        : isToday
+                        ? "var(--color-primary-light)"
+                        : "transparent",
+                      color: isSelected
+                        ? "#FFFFFF"
+                        : isToday
+                        ? "var(--color-primary)"
+                        : isCurrentMonth
+                        ? "var(--color-text-main)"
+                        : "var(--color-text-muted)",
+                      fontWeight: isSelected || isToday ? "bold" : "normal",
+                    }}
+                  >
+                    {format(day, "d")}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
