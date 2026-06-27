@@ -345,13 +345,14 @@ export default function Page() {
             <select
               value={view}
               onChange={(e) => setView(e.target.value as "day" | "week" | "month")}
-              className="appearance-none rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] py-2 pl-4 pr-10 text-sm font-medium text-[var(--color-text-main)] hover:border-[var(--color-border-hover)] focus:outline-none transition cursor-pointer"
+              className="appearance-none rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-sm font-medium text-[var(--color-text-main)] hover:border-[var(--color-border-hover)] focus:outline-none transition cursor-pointer"
+              style={{ padding: "8px 36px 8px 16px" }}
             >
               <option value="week">Week</option>
               <option value="day">Day</option>
               <option value="month">Month</option>
             </select>
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-[var(--color-text-muted)]">
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center text-[var(--color-text-muted)]" style={{ paddingRight: "12px" }}>
               <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
               </svg>
@@ -391,46 +392,60 @@ export default function Page() {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        <aside className="w-64 border-r border-[var(--color-border)] bg-[var(--color-surface)] p-6 flex flex-col space-y-6 overflow-y-auto">
+        <aside
+          className="border-r border-[var(--color-border)] bg-[var(--color-surface)] flex flex-col overflow-y-auto"
+          style={{ width: "260px", minWidth: "260px", flexShrink: 0, padding: "24px", gap: "24px" }}
+        >
           <button
             onClick={() => {
               setEditingEvent(null);
               setFormOpen(true);
             }}
-            className="flex items-center justify-center space-x-2 rounded-full bg-[var(--color-primary)] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-[var(--color-primary-light)] hover:bg-[var(--color-primary-hover)] transition duration-[var(--transition-fast)] transform hover:-translate-y-0.5"
+            className="flex items-center justify-center rounded-full bg-[var(--color-primary)] text-white shadow-md hover:bg-[var(--color-primary-hover)] transition duration-[var(--transition-fast)] transform hover:-translate-y-0.5 cursor-pointer"
+            style={{ padding: "8px 16px", gap: "8px", width: "fit-content", fontWeight: 600, fontSize: "14px" }}
           >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
             <span>Create</span>
           </button>
 
-          <div className="border border-[var(--color-border)] rounded-xl p-4 bg-[var(--color-bg-app)]">
-            <div className="flex items-center justify-between mb-3">
+          <div className="border border-[var(--color-border)] rounded-xl bg-[var(--color-bg-app)]" style={{ padding: "16px" }}>
+            <div className="flex items-center justify-between" style={{ marginBottom: "12px" }}>
               <span className="text-sm font-semibold text-[var(--color-text-main)]">July 2026</span>
-              <div className="flex space-x-1">
+              <div className="flex" style={{ gap: "4px" }}>
                 <button className="p-1 rounded hover:bg-[var(--color-surface)] text-[var(--color-text-muted)] transition">
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <svg style={{ width: "14px", height: "14px" }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
                 <button className="p-1 rounded hover:bg-[var(--color-surface)] text-[var(--color-text-muted)] transition">
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <svg style={{ width: "14px", height: "14px" }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
               </div>
             </div>
-            <div className="grid grid-cols-7 gap-y-2 text-center text-xs text-[var(--color-text-muted)] font-medium">
+            <div
+              className="text-center text-xs text-[var(--color-text-muted)] font-medium"
+              style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", rowGap: "8px" }}
+            >
               <div>S</div><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div>
               {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
                 <div
                   key={day}
-                  className={`py-1 rounded-full text-center transition cursor-pointer hover:bg-[var(--color-surface)] ${
-                    day === 27
-                      ? "bg-[var(--color-primary)] text-white font-bold"
-                      : "text-[var(--color-text-main)]"
-                  }`}
+                  className={`rounded-full text-center transition cursor-pointer hover:bg-[var(--color-surface)]`}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: "28px",
+                    height: "28px",
+                    margin: "0 auto",
+                    fontSize: "11px",
+                    backgroundColor: day === 27 ? "var(--color-primary)" : undefined,
+                    color: day === 27 ? "#FFFFFF" : "var(--color-text-main)",
+                  }}
                 >
                   {day}
                 </div>

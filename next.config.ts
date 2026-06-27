@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.resolve("."),
   },
+  devIndicators: false,
 };
 
 export default nextConfig;
