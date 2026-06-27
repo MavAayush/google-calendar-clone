@@ -287,17 +287,155 @@ export const PATCH = withErrorHandling(
           };
 
           return NextResponse.json(formattedEvent);
-        } else {
-          // THIS_AND_FOLLOWING or ALL (to be implemented in next phase)
-          return new Response(
-            JSON.stringify({
-              error: {
-                code: "VALIDATION_ERROR",
-                message: "Edit scope not implemented in this phase",
+        } else if (editScope === "THIS_AND_FOLLOWING") {
+          if (!targetDateStr) {
+            return new Response(
+              JSON.stringify({
+                error: {
+                  code: "VALIDATION_ERROR",
+                  message: "instanceDate is required for THIS_AND_FOLLOWING editScope",
+                  fields: { instanceDate: "instanceDate is required for THIS_AND_FOLLOWING editScope" },
+                },
+              }),
+              { status: 400, headers: { "Content-Type": "application/json" } }
+            );
+          }
+
+          // Validate version against anchor event
+          if (body.version !== undefined && existing.version !== body.version) {
+            throw new VersionConflictError();
+          }
+
+          // Step 1: Trim existing series — set seriesEndDate to the day before instanceDate
+          const splitDate = new Date(targetDateStr);
+          const dayBefore = new Date(splitDate);
+          dayBefore.setUTCDate(dayBefore.getUTCDate() - 1);
+
+          await prisma.recurrenceRule.update({
+            where: { id: existing.recurrenceRuleId },
+            data: { seriesEndDate: dayBefore },
+          });
+
+          // Step 2: Compute new start/end times for the new series anchor
+          const user = await prisma.user.findUnique({ where: { id: userId } });
+          const timezone = user?.timezone || "UTC";
+          const durationMs = existing.endTime.getTime() - existing.startTime.getTime();
+          const localStartStr = toLocal(existing.startTime.toISOString(), timezone, existing.allDay);
+          const timePart = localStartStr.split("T")[1];
+          const newAnchorStartStr = body.startTime || toUTC(`${targetDateStr}T${timePart}`, timezone, existing.allDay);
+          const newAnchorEndStr = body.endTime || new Date(new Date(newAnchorStartStr).getTime() + durationMs).toISOString();
+
+          // Step 3: Create a new recurrence rule starting at instanceDate
+          const newRule = await prisma.recurrenceRule.create({
+            data: {
+              frequency: existing.recurrenceRule!.frequency,
+              interval: existing.recurrenceRule!.interval,
+              seriesStartDate: new Date(targetDateStr),
+              seriesEndDate: body.recurrenceRule?.seriesEndDate ? new Date(body.recurrenceRule.seriesEndDate) : existing.recurrenceRule!.seriesEndDate,
+              byDay: (body.recurrenceRule?.byDay ?? existing.recurrenceRule!.byDay) || undefined,
+            },
+          });
+
+          // Step 4: Create a new anchor event for the new series
+          const newAnchor = await prisma.event.create({
+            data: {
+              userId,
+              title: body.title !== undefined ? body.title : existing.title,
+              description: body.description !== undefined ? body.description : existing.description,
+              startTime: new Date(newAnchorStartStr),
+              endTime: new Date(newAnchorEndStr),
+              allDay: body.allDay !== undefined ? body.allDay : existing.allDay,
+              recurrenceRuleId: newRule.id,
+              version: 1,
+            },
+            include: { recurrenceRule: true },
+          });
+
+          const formattedEvent = {
+            id: newAnchor.id,
+            title: newAnchor.title,
+            description: newAnchor.description,
+            startTime: newAnchor.startTime.toISOString(),
+            endTime: newAnchor.endTime.toISOString(),
+            allDay: newAnchor.allDay,
+            isRecurring: true,
+            recurrence: newAnchor.recurrenceRule ? {
+              frequency: newAnchor.recurrenceRule.frequency,
+              interval: newAnchor.recurrenceRule.interval,
+              seriesEndDate: newAnchor.recurrenceRule.seriesEndDate
+                ? newAnchor.recurrenceRule.seriesEndDate.toISOString().split("T")[0]
+                : null,
+              byDay: newAnchor.recurrenceRule.byDay,
+            } : null,
+            version: newAnchor.version,
+            conflicts: [],
+          };
+
+          return NextResponse.json(formattedEvent);
+
+        } else if (editScope === "ALL") {
+          // Validate version against anchor event
+          if (body.version !== undefined && existing.version !== body.version) {
+            throw new VersionConflictError();
+          }
+
+          const finalStart = body.startTime ? new Date(body.startTime) : existing.startTime;
+          const finalEnd = body.endTime ? new Date(body.endTime) : existing.endTime;
+
+          const conflicts = await findConflictingEvents(userId, finalStart, finalEnd, anchorId);
+
+          // Update the anchor event
+          const updatedAnchor = await prisma.event.update({
+            where: { id: anchorId },
+            data: {
+              title: body.title,
+              description: body.description,
+              startTime: body.startTime ? new Date(body.startTime) : undefined,
+              endTime: body.endTime ? new Date(body.endTime) : undefined,
+              allDay: body.allDay,
+              version: { increment: 1 },
+            },
+          });
+
+          // Update the recurrence rule if recurrence fields provided
+          if (body.recurrenceRule) {
+            await prisma.recurrenceRule.update({
+              where: { id: existing.recurrenceRuleId },
+              data: {
+                frequency: body.recurrenceRule.frequency,
+                interval: body.recurrenceRule.interval,
+                seriesStartDate: finalStart,
+                seriesEndDate: body.recurrenceRule.seriesEndDate ? new Date(body.recurrenceRule.seriesEndDate) : null,
+                byDay: body.recurrenceRule.byDay || Prisma.JsonNull,
               },
-            }),
-            { status: 400, headers: { "Content-Type": "application/json" } }
-          );
+            });
+          }
+
+          const updatedRule = await prisma.recurrenceRule.findUnique({
+            where: { id: existing.recurrenceRuleId },
+          });
+
+          const formattedEvent = {
+            id: updatedAnchor.id,
+            title: updatedAnchor.title,
+            description: updatedAnchor.description,
+            startTime: updatedAnchor.startTime.toISOString(),
+            endTime: updatedAnchor.endTime.toISOString(),
+            allDay: updatedAnchor.allDay,
+            isRecurring: true,
+            recurrence: updatedRule ? {
+              frequency: updatedRule.frequency,
+              interval: updatedRule.interval,
+              seriesEndDate: updatedRule.seriesEndDate
+                ? updatedRule.seriesEndDate.toISOString().split("T")[0]
+                : null,
+              byDay: updatedRule.byDay,
+            } : null,
+            version: updatedAnchor.version,
+            conflicts,
+          };
+
+          return NextResponse.json(formattedEvent);
         }
       }
 
@@ -437,17 +575,38 @@ export const DELETE = withErrorHandling(
         }
 
         return new Response(null, { status: 204 });
-      } else {
-        // Other scopes not supported in this phase
-        return new Response(
-          JSON.stringify({
-            error: {
-              code: "VALIDATION_ERROR",
-              message: "Delete scope not implemented in this phase",
-            },
-          }),
-          { status: 400, headers: { "Content-Type": "application/json" } }
-        );
+      } else if (editScope === "THIS_AND_FOLLOWING") {
+        if (!targetDateStr) {
+          return new Response(
+            JSON.stringify({
+              error: {
+                code: "VALIDATION_ERROR",
+                message: "instanceDate is required for THIS_AND_FOLLOWING editScope",
+              },
+            }),
+            { status: 400, headers: { "Content-Type": "application/json" } }
+          );
+        }
+
+        // Trim existing series — set seriesEndDate to day before instanceDate
+        const splitDate = new Date(targetDateStr);
+        const dayBefore = new Date(splitDate);
+        dayBefore.setUTCDate(dayBefore.getUTCDate() - 1);
+
+        await prisma.recurrenceRule.update({
+          where: { id: existing.recurrenceRuleId },
+          data: { seriesEndDate: dayBefore },
+        });
+
+        return new Response(null, { status: 204 });
+
+      } else if (editScope === "ALL") {
+        // Delete the anchor event — cascades to recurrence rule and all exceptions
+        await prisma.event.delete({
+          where: { id: anchorId },
+        });
+
+        return new Response(null, { status: 204 });
       }
     }
 
