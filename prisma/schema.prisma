@@ -1,0 +1,81 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Frequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum ExceptionType {
+  CANCELLED
+  MODIFIED
+}
+
+model User {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email       String   @unique
+  displayName String   @map("display_name")
+  timezone    String
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  events Event[]
+
+  @@map("users")
+}
+
+model Event {
+  id               String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String          @map("user_id") @db.Uuid
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title            String          @db.VarChar(255)
+  description      String?
+  startTime        DateTime        @map("start_time") @db.Timestamptz
+  endTime          DateTime        @map("end_time") @db.Timestamptz
+  allDay           Boolean         @default(false) @map("all_day")
+  recurrenceRuleId String?         @unique @map("recurrence_rule_id") @db.Uuid
+  recurrenceRule   RecurrenceRule? @relation(fields: [recurrenceRuleId], references: [id], onDelete: Cascade)
+  version          Int             @default(1)
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  exceptions RecurrenceException[]
+
+  @@index([userId, startTime, endTime], map: "idx_events_user_range")
+  @@index([recurrenceRuleId], map: "idx_events_recurrence_rule_id")
+  @@map("events")
+}
+
+model RecurrenceRule {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  frequency       Frequency
+  interval        Int       @default(1)
+  seriesStartDate DateTime  @map("series_start_date") @db.Date
+  seriesEndDate   DateTime? @map("series_end_date") @db.Date
+  byDay           Json?     @map("by_day") @db.JsonB
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  event      Event?
+  exceptions RecurrenceException[]
+
+  @@map("recurrence_rules")
+}
+
+model RecurrenceException {
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  recurrenceRuleId String         @map("recurrence_rule_id") @db.Uuid
+  recurrenceRule   RecurrenceRule @relation(fields: [recurrenceRuleId], references: [id], onDelete: Cascade)
+  instanceDate     DateTime       @map("instance_date") @db.Date
+  exceptionType    ExceptionType  @map("exception_type")
+  overrideEventId  String?        @unique @map("override_event_id") @db.Uuid
+  overrideEvent    Event?         @relation(fields: [overrideEventId], references: [id], onDelete: Cascade)
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([recurrenceRuleId, instanceDate], map: "idx_recurrence_exceptions_lookup")
+  @@map("recurrence_exceptions")
+}
