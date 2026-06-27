@@ -10,6 +10,8 @@ import { request } from "@/lib/api/request";
 import { EditScopePrompt } from "@/components/calendar/EditScopePrompt";
 import { useToast } from "@/components/ui/Toast";
 import { toUTC } from "@/lib/date/toUTC";
+import Link from "next/link";
+import { authClient } from "@/lib/auth/client";
 
 interface CalendarEvent {
   id: string;
@@ -31,6 +33,10 @@ interface CalendarEvent {
 export default function Page() {
   const queryClient = useQueryClient();
   const isMutating = useIsMutating();
+
+  const { data: session, isPending: sessionPending } = authClient.useSession();
+  const [isUserMenuOpen, setUserMenuOpen] = useState(false);
+
   const [view, setView] = useState<"day" | "week" | "month">("week");
   const [currentDate, setCurrentDate] = useState<Date>(new Date("2026-07-01"));
   const [isFormOpen, setFormOpen] = useState(false);
@@ -42,6 +48,12 @@ export default function Page() {
     newEnd: Date;
   } | null>(null);
   const { show: showToast } = useToast();
+
+  const handleSignOut = async () => {
+    await authClient.signOut();
+    window.location.href = "/auth/sign-in";
+  };
+
 
   const startRange = (() => {
     if (view === "day") {
@@ -72,6 +84,7 @@ export default function Page() {
       });
       return request<{ events: CalendarEvent[] }>(`/api/events?${params.toString()}`);
     },
+    enabled: !sessionPending && !!session?.user,
   });
 
   useEffect(() => {
@@ -236,6 +249,43 @@ export default function Page() {
     setCurrentDate(new Date());
   };
 
+  if (sessionPending) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-[var(--color-bg-app)]">
+        <div
+          className="flex flex-col items-center border border-[var(--color-border)] bg-[var(--color-surface)] shadow-sm animate-pulse"
+          style={{ width: "320px", padding: "24px", borderRadius: "16px" }}
+        >
+          <div
+            className="bg-border"
+            style={{ height: "24px", width: "75%", borderRadius: "4px", marginBottom: "16px" }}
+          />
+          <div
+            className="bg-border"
+            style={{ height: "16px", width: "100%", borderRadius: "4px", marginBottom: "8px" }}
+          />
+          <div
+            className="bg-border"
+            style={{ height: "16px", width: "83%", borderRadius: "4px" }}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (!session?.user) {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center bg-[var(--color-bg-app)]">
+        <p className="text-text-secondary" style={{ marginBottom: "16px" }}>
+          You are not signed in.
+        </p>
+        <Link href="/auth/sign-in" className="font-semibold text-accent hover:underline">
+          Go to Sign In
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[var(--color-bg-app)] relative">
       {isMutating > 0 && (
@@ -307,8 +357,35 @@ export default function Page() {
               </svg>
             </div>
           </div>
-          <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-[var(--color-primary)] to-[var(--color-primary-hover)] flex items-center justify-center text-white font-bold text-sm shadow-md">
-            U
+          <div className="relative">
+            <button
+              onClick={() => setUserMenuOpen(!isUserMenuOpen)}
+              className="h-8 w-8 rounded-full bg-gradient-to-tr from-[var(--color-primary)] to-[var(--color-primary-hover)] flex items-center justify-center text-white font-bold text-sm shadow-md focus:outline-none hover:opacity-90 transition cursor-pointer"
+            >
+              {session.user.name ? session.user.name.charAt(0).toUpperCase() : "U"}
+            </button>
+            {isUserMenuOpen && (
+              <div
+                className="absolute right-0 mt-2 w-48 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg py-1 z-50 animate-fade-in"
+                style={{ right: 0, top: "100%", marginTop: "8px" }}
+              >
+                <div className="px-4 py-2 border-b border-[var(--color-border)]" style={{ padding: "12px 16px" }}>
+                  <p className="text-sm font-semibold text-text-primary truncate">
+                    {session.user.name || "User"}
+                  </p>
+                  <p className="text-xs text-text-secondary truncate" style={{ marginTop: "2px" }}>
+                    {session.user.email}
+                  </p>
+                </div>
+                <button
+                  onClick={handleSignOut}
+                  className="w-full text-left px-4 py-2 text-sm hover:bg-[var(--color-bg-app)] transition focus:outline-none cursor-pointer"
+                  style={{ color: "var(--color-danger)", border: "none", background: "none", padding: "8px 16px" }}
+                >
+                  Sign out
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>

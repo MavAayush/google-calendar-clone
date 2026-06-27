@@ -1,23 +1,35 @@
 import prisma from "@/lib/db/client";
+import { auth } from "@/lib/auth/server";
+
+export class UnauthorizedError extends Error {
+  status = 401;
+  code = "UNAUTHORIZED";
+  constructor(message = "Unauthorized") {
+    super(message);
+    this.name = "UnauthorizedError";
+  }
+}
 
 export const getCurrentUserId = async (_request: Request): Promise<string> => {
-  const devUserId = process.env.DEV_USER_ID;
-  const devUserEmail = process.env.DEV_USER_EMAIL;
-  const devUserDisplayName = process.env.DEV_USER_DISPLAY_NAME;
+  const { data: session } = await auth.getSession();
 
-  if (!devUserId || !devUserEmail || !devUserDisplayName) {
-    throw new Error("Missing development user environment configuration");
+  if (!session?.user) {
+    throw new UnauthorizedError();
   }
 
-  await prisma.user.upsert({
-    where: { id: devUserId },
-    update: {},
-    create: {
-      id: devUserId,
-      email: devUserEmail,
-      displayName: devUserDisplayName,
-      timezone: "UTC",
-    },
+  let user = await prisma.user.findUnique({
+    where: { email: session.user.email },
   });
-  return devUserId;
+
+  if (!user) {
+    user = await prisma.user.create({
+      data: {
+        email: session.user.email,
+        displayName: session.user.name || session.user.email.split("@")[0],
+        timezone: "UTC",
+      },
+    });
+  }
+
+  return user.id;
 };
