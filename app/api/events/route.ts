@@ -6,6 +6,7 @@ import { eventInputSchema, EventInput } from "@/lib/validation/event";
 import { getCurrentUserId } from "@/lib/auth";
 import prisma from "@/lib/db/client";
 import { findConflictingEvents } from "@/lib/db/conflicts";
+import { expandEventSeries, ExpandedInstance } from "@/lib/recurrence/expand";
 
 const getEventsQuerySchema = z.object({
   start: z.string().datetime(),
@@ -25,37 +26,67 @@ export const GET = withErrorHandling(async (request: Request): Promise<Response>
   const { start, end } = parsedQuery;
   const userId = await getCurrentUserId(request);
 
-  const events = await prisma.event.findMany({
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+  });
+  const timezone = user?.timezone || "UTC";
+
+  const dbEvents = await prisma.event.findMany({
     where: {
       userId,
-      startTime: { lt: new Date(end) },
-      endTime: { gt: new Date(start) },
+      OR: [
+        {
+          recurrenceRuleId: null,
+          startTime: { lt: new Date(end) },
+          endTime: { gt: new Date(start) },
+        },
+        {
+          recurrenceRule: {
+            seriesStartDate: { lte: new Date(end) },
+            OR: [
+              { seriesEndDate: null },
+              { seriesEndDate: { gte: new Date(start) } },
+            ],
+          },
+        },
+      ],
     },
     include: {
       recurrenceRule: true,
+      exceptions: {
+        include: {
+          overrideEvent: {
+            include: {
+              recurrenceRule: true,
+            },
+          },
+        },
+      },
     },
   });
 
-  const formattedEvents = events.map((e) => ({
-    id: e.id,
-    title: e.title,
-    description: e.description,
-    startTime: e.startTime.toISOString(),
-    endTime: e.endTime.toISOString(),
-    allDay: e.allDay,
-    isRecurring: !!e.recurrenceRule,
-    recurrence: e.recurrenceRule ? {
-      frequency: e.recurrenceRule.frequency,
-      interval: e.recurrenceRule.interval,
-      seriesEndDate: e.recurrenceRule.seriesEndDate
-        ? e.recurrenceRule.seriesEndDate.toISOString().split("T")[0]
-        : null,
-      byDay: e.recurrenceRule.byDay,
-    } : null,
-    version: e.version,
-  }));
+  const results: ExpandedInstance[] = [];
 
-  return NextResponse.json({ events: formattedEvents });
+  for (const e of dbEvents) {
+    if (!e.recurrenceRule) {
+      results.push({
+        id: e.id,
+        title: e.title,
+        description: e.description,
+        startTime: e.startTime.toISOString(),
+        endTime: e.endTime.toISOString(),
+        allDay: e.allDay,
+        isRecurring: false,
+        recurrence: null,
+        version: e.version,
+      });
+    } else {
+      const expanded = expandEventSeries(e, new Date(start), new Date(end), timezone);
+      results.push(...expanded);
+    }
+  }
+
+  return NextResponse.json({ events: results });
 });
 
 export const POST = withErrorHandling(
