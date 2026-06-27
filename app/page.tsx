@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { format, addDays, subDays } from "date-fns";
 import { CalendarGrid, CalendarEvent } from "@/components/calendar/CalendarGrid";
+import { MonthGrid } from "@/components/calendar/MonthGrid";
 
 const mockEvents: CalendarEvent[] = [
   {
@@ -231,26 +232,7 @@ export default function Page() {
 
         <main className="flex-1 p-6 flex overflow-hidden">
           {view === "month" ? (
-            <div className="flex-1 flex flex-col justify-center items-center">
-              <div className="max-w-md p-8 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg text-center flex flex-col items-center space-y-6 transition hover:shadow-xl duration-[var(--transition-normal)]">
-                <div className="h-16 w-16 rounded-2xl bg-[var(--color-primary-light)] flex items-center justify-center text-[var(--color-primary)]">
-                  <svg className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <div className="space-y-2">
-                  <h2 className="font-display text-2xl font-bold tracking-tight text-[var(--color-text-main)]">
-                    No views active
-                  </h2>
-                  <p className="text-sm text-[var(--color-text-muted)] leading-relaxed">
-                    Welcome to your Calendar. Setup is complete and all design tokens are verified. Choose a view or create an event to get started.
-                  </p>
-                </div>
-                <button className="px-5 py-2.5 rounded-lg border border-[var(--color-border)] hover:border-[var(--color-border-hover)] hover:bg-[var(--color-bg-app)] text-sm font-medium transition duration-[var(--transition-fast)]">
-                  Explore Settings
-                </button>
-              </div>
-            </div>
+            <MonthGrid currentDate={currentDate} events={mockEvents} />
           ) : (
             <CalendarGrid view={view} currentDate={currentDate} events={mockEvents} />
           )}
