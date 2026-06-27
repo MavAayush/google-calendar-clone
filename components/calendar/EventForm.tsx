@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, addDays } from "date-fns";
 import { Modal } from "@/components/ui/Modal";
@@ -67,6 +67,22 @@ export const EventForm: React.FC<EventFormProps> = ({
   const [allDay, setAllDay] = useState(initialValues.allDay);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  /* eslint-disable react-hooks/set-state-in-effect */
+  /* eslint-disable react-hooks/exhaustive-deps */
+  useEffect(() => {
+    if (isOpen) {
+      setTitle(initialValues.title);
+      setDescription(initialValues.description);
+      setDate(initialValues.date);
+      setStartTime(initialValues.startTime);
+      setEndTime(initialValues.endTime);
+      setAllDay(initialValues.allDay);
+      setErrors({});
+    }
+  }, [isOpen, event, defaultDate]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   const mutation = useMutation<
     { id: string; title: string; conflicts?: { title: string }[] },

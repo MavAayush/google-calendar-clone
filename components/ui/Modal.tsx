@@ -16,7 +16,7 @@ export const Modal: React.FC<ModalProps> = ({
 }) => {
   const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
   const [shouldRender, setShouldRender] = useState(isOpen);
-  const [animate, setAnimate] = useState(isOpen);
+  const [animate, setAnimate] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
 
   if (isOpen !== prevIsOpen) {
@@ -33,7 +33,7 @@ export const Modal: React.FC<ModalProps> = ({
       const timer = setTimeout(() => setAnimate(true), 10);
       return () => clearTimeout(timer);
     } else {
-      const timer = setTimeout(() => setShouldRender(false), 150);
+      const timer = setTimeout(() => setShouldRender(false), 200);
       return () => clearTimeout(timer);
     }
   }, [isOpen]);
@@ -86,7 +86,7 @@ export const Modal: React.FC<ModalProps> = ({
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-opacity duration-150 ${
+      className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-opacity duration-200 ease-out ${
         animate ? "opacity-100" : "opacity-0"
       }`}
       style={{ backgroundColor: "rgba(26, 29, 33, 0.4)" }}
@@ -94,23 +94,23 @@ export const Modal: React.FC<ModalProps> = ({
     >
       <div
         ref={modalRef}
-        className={`bg-surface border border-border w-full max-w-md rounded-md shadow-sm transition-all duration-150 ${
-          animate ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"
+        className={`bg-[var(--color-surface)] border border-[var(--color-border)] w-full max-w-md rounded-2xl shadow-xl transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+          animate ? "scale-100 opacity-100" : "scale-95 opacity-0"
         }`}
         onClick={(e) => e.stopPropagation()}
       >
         {title && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-            <h2 className="text-lg font-semibold text-text-primary">{title}</h2>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)]">
+            <h2 className="text-lg font-semibold text-[var(--color-text-main)]">{title}</h2>
             <button
               onClick={onClose}
-              className="text-text-secondary hover:text-text-primary text-xl p-1 rounded-sm focus:outline-none focus:ring-2 focus:ring-accent"
+              className="text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] text-xl p-1 rounded-sm focus:outline-none"
             >
               &times;
             </button>
           </div>
         )}
-        <div className="px-6 py-4">{children}</div>
+        <div className="px-6 py-6">{children}</div>
       </div>
     </div>,
     document.body

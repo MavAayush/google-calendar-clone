@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { format, addDays, subDays, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from "date-fns";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, useIsMutating } from "@tanstack/react-query";
 import { CalendarGrid } from "@/components/calendar/CalendarGrid";
 import { MonthGrid } from "@/components/calendar/MonthGrid";
 import { EventForm } from "@/components/calendar/EventForm";
@@ -22,6 +22,7 @@ interface CalendarEvent {
 
 export default function Page() {
   const queryClient = useQueryClient();
+  const isMutating = useIsMutating();
   const [view, setView] = useState<"day" | "week" | "month">("week");
   const [currentDate, setCurrentDate] = useState<Date>(new Date("2026-07-01"));
   const [isFormOpen, setFormOpen] = useState(false);
@@ -175,7 +176,12 @@ export default function Page() {
   };
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[var(--color-bg-app)]">
+    <div className="flex h-screen flex-col overflow-hidden bg-[var(--color-bg-app)] relative">
+      {isMutating > 0 && (
+        <div className="absolute top-16 left-0 right-0 h-0.5 bg-[var(--color-primary-light)] z-50 overflow-hidden pointer-events-none">
+          <div className="w-full h-full bg-[var(--color-primary)] origin-left animate-loading-slide" />
+        </div>
+      )}
       <header className="flex h-16 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)] px-6 shadow-sm">
         <div className="flex items-center space-x-6">
           <div className="flex items-center space-x-2">
@@ -343,39 +349,39 @@ export default function Page() {
               </div>
             </div>
           )}
-          {view === "month" ? (
-            <MonthGrid
-              currentDate={currentDate}
-              events={data?.events || []}
-              onEventClick={(event) => {
-                setEditingEvent(event);
-                setFormOpen(true);
-              }}
-            />
-          ) : (
-            <CalendarGrid
-              view={view}
-              currentDate={currentDate}
-              events={data?.events || []}
-              onEventClick={(event) => {
-                setEditingEvent(event);
-                setFormOpen(true);
-              }}
-              onEventMove={handleEventMove}
-              onEventResize={handleEventResize}
-            />
-          )}
+          <div key={view + currentDate.toISOString()} className="flex flex-1 overflow-hidden animate-fade-in">
+            {view === "month" ? (
+              <MonthGrid
+                currentDate={currentDate}
+                events={data?.events || []}
+                onEventClick={(event) => {
+                  setEditingEvent(event);
+                  setFormOpen(true);
+                }}
+              />
+            ) : (
+              <CalendarGrid
+                view={view}
+                currentDate={currentDate}
+                events={data?.events || []}
+                onEventClick={(event) => {
+                  setEditingEvent(event);
+                  setFormOpen(true);
+                }}
+                onEventMove={handleEventMove}
+                onEventResize={handleEventResize}
+              />
+            )}
+          </div>
         </main>
       </div>
 
-      {isFormOpen && (
-        <EventForm
-          isOpen={isFormOpen}
-          onClose={() => setFormOpen(false)}
-          defaultDate={currentDate}
-          event={editingEvent || undefined}
-        />
-      )}
+      <EventForm
+        isOpen={isFormOpen}
+        onClose={() => setFormOpen(false)}
+        defaultDate={currentDate}
+        event={editingEvent || undefined}
+      />
     </div>
   );
 }

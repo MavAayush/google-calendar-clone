@@ -42,6 +42,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
     tempHeight: number;
     isTop: boolean;
   } | null>(null);
+  const [activeDragDay, setActiveDragDay] = useState<string | null>(null);
   const ignoreNextClickRef = useRef(false);
 
   const formatHour = (hour: number) => {
@@ -52,6 +53,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>, day: Date) => {
     e.preventDefault();
+    setActiveDragDay(null);
     const eventId = e.dataTransfer.getData("text/plain");
     const draggedEvent = events.find((ev) => ev.id === eventId);
     if (!draggedEvent) return;
@@ -219,9 +221,17 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
               return (
                 <div
                   key={day.toISOString()}
-                  onDragOver={(e) => e.preventDefault()}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (activeDragDay !== day.toISOString()) {
+                      setActiveDragDay(day.toISOString());
+                    }
+                  }}
+                  onDragLeave={() => setActiveDragDay(null)}
                   onDrop={(e) => handleDrop(e, day)}
-                  className="relative flex-1 h-full border-r border-[var(--color-border)] last:border-r-0"
+                  className={`relative flex-1 h-full border-r border-[var(--color-border)] last:border-r-0 transition-colors duration-200 ${
+                    activeDragDay === day.toISOString() ? "bg-[var(--color-primary)]/[0.03]" : ""
+                  }`}
                 >
                   {dayEvents.map((event) => {
                     const layout = layouts.find((l) => l.id === event.id);
@@ -252,6 +262,10 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                       }
                     }
 
+                    const transitionStyle = isResizingThis
+                      ? "none"
+                      : "top 0.22s cubic-bezier(0.16, 1, 0.3, 1), height 0.22s cubic-bezier(0.16, 1, 0.3, 1), transform 0.15s ease-out, box-shadow 0.15s ease-out";
+
                     return (
                       <div
                         key={event.id}
@@ -266,12 +280,13 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                           }
                           onEventClick(event);
                         }}
-                        className="absolute p-2 rounded-lg bg-[var(--color-primary-light)] border-l-4 border-[var(--color-primary)] text-[var(--color-primary)] shadow-sm cursor-pointer hover:shadow-md transition-[box-shadow,transform] duration-[var(--transition-fast)] overflow-hidden select-none hover:scale-[1.01] active:opacity-60"
+                        className="absolute p-2 rounded-lg bg-[var(--color-primary-light)] border-l-4 border-[var(--color-primary)] text-[var(--color-primary)] shadow-sm cursor-pointer hover:shadow-md select-none hover:scale-[1.01] active:opacity-60"
                         style={{
                           top: `${top}px`,
                           height: `${height}px`,
                           left: `${layout.left}%`,
                           width: `${layout.width - 1}%`,
+                          transition: transitionStyle,
                         }}
                       >
                         <div
