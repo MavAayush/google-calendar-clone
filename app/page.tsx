@@ -5,6 +5,7 @@ import { format, addDays, subDays, startOfDay, endOfDay, startOfWeek, endOfWeek,
 import { useQuery } from "@tanstack/react-query";
 import { CalendarGrid } from "@/components/calendar/CalendarGrid";
 import { MonthGrid } from "@/components/calendar/MonthGrid";
+import { EventForm } from "@/components/calendar/EventForm";
 import { request } from "@/lib/api/request";
 import { useToast } from "@/components/ui/Toast";
 
@@ -21,6 +22,7 @@ interface CalendarEvent {
 export default function Page() {
   const [view, setView] = useState<"day" | "week" | "month">("week");
   const [currentDate, setCurrentDate] = useState<Date>(new Date("2026-07-01"));
+  const [isCreateModalOpen, setCreateModalOpen] = useState(false);
   const { show: showToast } = useToast();
 
   const startRange = (() => {
@@ -154,7 +156,10 @@ export default function Page() {
 
       <div className="flex flex-1 overflow-hidden">
         <aside className="w-64 border-r border-[var(--color-border)] bg-[var(--color-surface)] p-6 flex flex-col space-y-6 overflow-y-auto">
-          <button className="flex items-center justify-center space-x-2 rounded-full bg-[var(--color-primary)] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-[var(--color-primary-light)] hover:bg-[var(--color-primary-hover)] transition duration-[var(--transition-fast)] transform hover:-translate-y-0.5">
+          <button
+            onClick={() => setCreateModalOpen(true)}
+            className="flex items-center justify-center space-x-2 rounded-full bg-[var(--color-primary)] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-[var(--color-primary-light)] hover:bg-[var(--color-primary-hover)] transition duration-[var(--transition-fast)] transform hover:-translate-y-0.5"
+          >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
@@ -250,6 +255,14 @@ export default function Page() {
           )}
         </main>
       </div>
+
+      {isCreateModalOpen && (
+        <EventForm
+          isOpen={isCreateModalOpen}
+          onClose={() => setCreateModalOpen(false)}
+          defaultDate={currentDate}
+        />
+      )}
     </div>
   );
 }
