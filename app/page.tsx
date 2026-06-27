@@ -2,12 +2,13 @@
 
 import React, { useState, useEffect } from "react";
 import { format, addDays, subDays, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from "date-fns";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CalendarGrid } from "@/components/calendar/CalendarGrid";
 import { MonthGrid } from "@/components/calendar/MonthGrid";
 import { EventForm } from "@/components/calendar/EventForm";
 import { request } from "@/lib/api/request";
 import { useToast } from "@/components/ui/Toast";
+import { toUTC } from "@/lib/date/toUTC";
 
 interface CalendarEvent {
   id: string;
@@ -20,6 +21,7 @@ interface CalendarEvent {
 }
 
 export default function Page() {
+  const queryClient = useQueryClient();
   const [view, setView] = useState<"day" | "week" | "month">("week");
   const [currentDate, setCurrentDate] = useState<Date>(new Date("2026-07-01"));
   const [isFormOpen, setFormOpen] = useState(false);
@@ -62,6 +64,79 @@ export default function Page() {
       showToast(error.message || "Failed to load events", "error");
     }
   }, [isError, error, showToast]);
+
+  const moveEventMutation = useMutation<
+    { id: string; title: string; conflicts?: { title: string }[] },
+    { message?: string },
+    { event: CalendarEvent; startTime: string; endTime: string },
+    { previousQueries: [unknown, unknown][] }
+  >({
+    mutationFn: ({ event, startTime, endTime }) => {
+      return request<{ id: string; title: string; conflicts?: { title: string }[] }>(`/api/events/${event.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          version: event.version,
+          startTime,
+          endTime,
+        }),
+      });
+    },
+    onMutate: async ({ event, startTime, endTime }) => {
+      await queryClient.cancelQueries({ queryKey: ["events"] });
+      const previousQueries = queryClient.getQueriesData({ queryKey: ["events"] });
+
+      queryClient.setQueriesData({ queryKey: ["events"] }, (old: { events: CalendarEvent[] } | undefined) => {
+        if (!old || !old.events) return old;
+        return {
+          ...old,
+          events: old.events.map((e: CalendarEvent) =>
+            e.id === event.id
+              ? { ...e, startTime, endTime, version: e.version + 1 }
+              : e
+          ),
+        };
+      });
+
+      return { previousQueries };
+    },
+    onError: (err, variables, context) => {
+      if (context?.previousQueries) {
+        for (const [key, value] of context.previousQueries) {
+          queryClient.setQueryData(key as readonly unknown[], value);
+        }
+      }
+      showToast(err.message || "Failed to move event", "error");
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["events"] });
+      if (data.conflicts && data.conflicts.length > 0) {
+        const conflictTitles = data.conflicts.map((c) => c.title).join(", ");
+        showToast(`⚠️ Moved, but overlaps with: ${conflictTitles}`, "warning");
+      } else {
+        showToast("Event moved successfully", "success");
+      }
+    },
+  });
+
+  const handleEventMove = (event: CalendarEvent, newStart: Date, newEnd: Date) => {
+    const timezone =
+      process.env.NEXT_PUBLIC_TIMEZONE ||
+      Intl.DateTimeFormat().resolvedOptions().timeZone ||
+      "UTC";
+
+    const localStartStr = format(newStart, "yyyy-MM-dd'T'HH:mm:ss.SSS");
+    const localEndStr = format(newEnd, "yyyy-MM-dd'T'HH:mm:ss.SSS");
+
+    const startTimeUTC = toUTC(localStartStr, timezone, event.allDay);
+    const endTimeUTC = toUTC(localEndStr, timezone, event.allDay);
+
+    moveEventMutation.mutate({
+      event,
+      startTime: startTimeUTC,
+      endTime: endTimeUTC,
+    });
+  };
 
   const handlePrev = () => {
     if (view === "day") {
@@ -270,6 +345,7 @@ export default function Page() {
                 setEditingEvent(event);
                 setFormOpen(true);
               }}
+              onEventMove={handleEventMove}
             />
           )}
         </main>

@@ -17,6 +17,7 @@ interface CalendarGridProps {
   currentDate: Date;
   events: CalendarEvent[];
   onEventClick: (event: CalendarEvent) => void;
+  onEventMove: (event: CalendarEvent, newStart: Date, newEnd: Date) => void;
 }
 
 export const CalendarGrid: React.FC<CalendarGridProps> = ({
@@ -24,6 +25,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
   currentDate,
   events,
   onEventClick,
+  onEventMove,
 }) => {
   const start = startOfWeek(currentDate, { weekStartsOn: 0 });
   const days = view === "day"
@@ -36,6 +38,29 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
     if (hour === 0) return "12 AM";
     if (hour === 12) return "12 PM";
     return hour > 12 ? `${hour - 12} PM` : `${hour} AM`;
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>, day: Date) => {
+    e.preventDefault();
+    const eventId = e.dataTransfer.getData("text/plain");
+    const draggedEvent = events.find((ev) => ev.id === eventId);
+    if (!draggedEvent) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const dropY = e.clientY - rect.top;
+
+    const hourFraction = dropY / 60;
+    const dropMinutes = Math.round(hourFraction * 60);
+    const roundedMinutes = Math.round(dropMinutes / 15) * 15;
+
+    const newStart = new Date(day);
+    newStart.setHours(0, 0, 0, 0);
+    newStart.setMinutes(roundedMinutes);
+
+    const durationMs = new Date(draggedEvent.endTime).getTime() - new Date(draggedEvent.startTime).getTime();
+    const newEnd = new Date(newStart.getTime() + durationMs);
+
+    onEventMove(draggedEvent, newStart, newEnd);
   };
 
   return (
@@ -111,6 +136,8 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
               return (
                 <div
                   key={day.toISOString()}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => handleDrop(e, day)}
                   className="relative flex-1 h-full border-r border-[var(--color-border)] last:border-r-0"
                 >
                   {dayEvents.map((event) => {
@@ -129,13 +156,15 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                     return (
                       <div
                         key={event.id}
+                        draggable={true}
+                        onDragStart={(e) => e.dataTransfer.setData("text/plain", event.id)}
                         onClick={() => onEventClick(event)}
-                        className="absolute p-2 rounded-lg bg-[var(--color-primary-light)] border-l-4 border-[var(--color-primary)] text-[var(--color-primary)] shadow-sm cursor-pointer hover:shadow-md transition-[box-shadow,transform] duration-[var(--transition-fast)] overflow-hidden select-none hover:scale-[1.01]"
+                        className="absolute p-2 rounded-lg bg-[var(--color-primary-light)] border-l-4 border-[var(--color-primary)] text-[var(--color-primary)] shadow-sm cursor-pointer hover:shadow-md transition-[box-shadow,transform] duration-[var(--transition-fast)] overflow-hidden select-none hover:scale-[1.01] active:opacity-60"
                         style={{
                           top: `${top}px`,
                           height: `${height}px`,
                           left: `${layout.left}%`,
-                          width: `${layout.width - 1}%`, // subtle gap between events
+                          width: `${layout.width - 1}%`,
                         }}
                       >
                         <div className="font-semibold text-xs truncate leading-tight">
