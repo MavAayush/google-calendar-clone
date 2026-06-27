@@ -25,6 +25,8 @@ const patchEventInputSchema = eventInputObjectSchema
     }
   );
 
+import { findConflictingEvents } from "@/lib/db/conflicts";
+
 type PatchEventInput = z.infer<typeof patchEventInputSchema>;
 
 export const GET = withErrorHandling(
@@ -66,6 +68,27 @@ export const PATCH = withErrorHandling(
     return withValidation(patchEventInputSchema, async (req: Request, body: PatchEventInput): Promise<Response> => {
       const userId = await getCurrentUserId(req);
 
+      const existing = await prisma.event.findUnique({
+        where: { id },
+      });
+
+      if (!existing || existing.userId !== userId) {
+        throw new Prisma.PrismaClientKnownRequestError("Record not found", {
+          code: "P2025",
+          clientVersion: "7.8.0",
+        });
+      }
+
+      const finalStart = body.startTime ? new Date(body.startTime) : existing.startTime;
+      const finalEnd = body.endTime ? new Date(body.endTime) : existing.endTime;
+
+      const conflicts = await findConflictingEvents(
+        userId,
+        finalStart,
+        finalEnd,
+        id
+      );
+
       const result = await prisma.event.updateMany({
         where: {
           id,
@@ -83,17 +106,6 @@ export const PATCH = withErrorHandling(
       });
 
       if (result.count === 0) {
-        const existing = await prisma.event.findUnique({
-          where: { id },
-        });
-
-        if (!existing || existing.userId !== userId) {
-          throw new Prisma.PrismaClientKnownRequestError("Record not found", {
-            code: "P2025",
-            clientVersion: "7.8.0",
-          });
-        }
-
         throw new VersionConflictError();
       }
 
@@ -111,6 +123,7 @@ export const PATCH = withErrorHandling(
         isRecurring: false,
         recurrence: null,
         version: event.version,
+        conflicts,
       };
 
       return NextResponse.json(formattedEvent);

@@ -5,6 +5,7 @@ import { withValidation } from "@/middleware/validate";
 import { eventInputSchema, EventInput } from "@/lib/validation/event";
 import { getCurrentUserId } from "@/lib/auth";
 import prisma from "@/lib/db/client";
+import { findConflictingEvents } from "@/lib/db/conflicts";
 
 const getEventsQuerySchema = z.object({
   start: z.string().datetime(),
@@ -51,6 +52,12 @@ export const POST = withErrorHandling(
   withValidation(eventInputSchema, async (request: Request, body: EventInput): Promise<Response> => {
     const userId = await getCurrentUserId(request);
 
+    const conflicts = await findConflictingEvents(
+      userId,
+      new Date(body.startTime),
+      new Date(body.endTime)
+    );
+
     const event = await prisma.event.create({
       data: {
         userId,
@@ -72,8 +79,10 @@ export const POST = withErrorHandling(
       isRecurring: false,
       recurrence: null,
       version: event.version,
+      conflicts,
     };
 
-    return NextResponse.json(formattedEvent, { status: 201 });
+    const status = conflicts.length > 0 ? 200 : 201;
+    return NextResponse.json(formattedEvent, { status });
   })
 );
