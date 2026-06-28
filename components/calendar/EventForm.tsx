@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, addDays } from "date-fns";
 import { Modal } from "@/components/ui/Modal";
@@ -198,7 +198,7 @@ export const EventForm: React.FC<EventFormProps> = ({
 
       if (data.conflicts && data.conflicts.length > 0) {
         const conflictTitles = data.conflicts.map((c) => c.title).join(", ");
-        showToast(`⚠️ Saved, but overlaps with: ${conflictTitles}`, "warning");
+        showToast(`Saved, but overlaps with: ${conflictTitles}`, "warning");
       } else {
         showToast(event ? "Event updated successfully" : "Event created successfully", "success");
       }
@@ -338,7 +338,7 @@ export const EventForm: React.FC<EventFormProps> = ({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={event ? "Edit Event" : "Create Event"}>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
         <Input
           label="Title"
           id="event-title"
@@ -347,51 +347,97 @@ export const EventForm: React.FC<EventFormProps> = ({
           error={errors.title}
           placeholder="Add title"
           autoFocus
+          wrapperClassName="mb-1"
+          style={{
+            borderRadius: "8px",
+            border: "1px solid var(--color-border)",
+            padding: "6px 10px",
+            fontSize: "13px",
+            fontWeight: 500,
+            outline: "none"
+          }}
         />
 
-        <div className="flex flex-col mb-4">
-          <label htmlFor="event-description" className="text-text-secondary text-sm font-semibold mb-1">
+        <div className="flex flex-col" style={{ marginBottom: "4px" }}>
+          <label htmlFor="event-description" style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-text-muted)", marginBottom: "4px" }}>
             Description
           </label>
           <textarea
             id="event-description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            className="px-3 py-2 border border-border bg-surface text-text-primary rounded-sm focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent disabled:opacity-50 text-base resize-none h-24 transition-colors"
+            className="px-3 py-2 border border-border bg-surface text-text-primary text-base resize-none transition-colors"
+            style={{
+              borderRadius: "8px",
+              border: "1px solid var(--color-border)",
+              padding: "6px 10px",
+              outline: "none",
+              fontSize: "13px",
+              height: "56px"
+            }}
             placeholder="Add description"
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-4" style={{ marginBottom: "4px" }}>
           <Input
             label="Date"
             id="event-date"
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
+            wrapperClassName="mb-0"
+            style={{ borderRadius: "8px", border: "1px solid var(--color-border)", padding: "6px 10px", fontSize: "13px" }}
           />
 
-          <div className="flex items-center pl-2 pt-6">
-            <label className="flex items-center space-x-2.5 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={allDay}
-                onChange={(e) => setAllDay(e.target.checked)}
-                className="h-4.5 w-4.5 rounded border-[var(--color-border)] text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer"
-              />
-              <span className="text-sm font-medium text-[var(--color-text-main)]">All day</span>
+          <div className="flex items-center pl-2" style={{ paddingTop: "16px" }}>
+            <label className="flex items-center space-x-3 cursor-pointer select-none">
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={allDay}
+                  onChange={(e) => setAllDay(e.target.checked)}
+                  style={{ display: "none" }}
+                />
+                <div
+                  style={{
+                    width: "36px",
+                    height: "20px",
+                    borderRadius: "10px",
+                    backgroundColor: allDay ? "var(--color-primary)" : "#E2E4E8",
+                    transition: "background-color 0.2s"
+                  }}
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    left: "3px",
+                    top: "3px",
+                    width: "14px",
+                    height: "14px",
+                    borderRadius: "50%",
+                    backgroundColor: "#FFFFFF",
+                    transform: allDay ? "translateX(16px)" : "translateX(0)",
+                    transition: "transform 0.2s",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.15)"
+                  }}
+                />
+              </div>
+              <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text-main)" }}>All day</span>
             </label>
           </div>
         </div>
 
         {!allDay && (
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4" style={{ marginBottom: "4px" }}>
             <Input
               label="Start Time"
               id="event-start-time"
               type="time"
               value={startTime}
               onChange={(e) => setStartTime(e.target.value)}
+              wrapperClassName="mb-0"
+              style={{ borderRadius: "8px", border: "1px solid var(--color-border)", padding: "6px 10px", fontSize: "13px" }}
             />
             <Input
               label="End Time"
@@ -400,47 +446,81 @@ export const EventForm: React.FC<EventFormProps> = ({
               value={endTime}
               onChange={(e) => setEndTime(e.target.value)}
               error={errors.endTime}
+              wrapperClassName="mb-0"
+              style={{ borderRadius: "8px", border: "1px solid var(--color-border)", padding: "6px 10px", fontSize: "13px" }}
             />
           </div>
         )}
 
-        <div className="flex flex-col space-y-1">
-          <label htmlFor="event-repeat" className="text-[var(--color-text-muted)] text-sm font-semibold">
-            Repeat
-          </label>
-          <select
-            id="event-repeat"
-            value={repeatType}
-            onChange={(e) => setRepeatType(e.target.value as "none" | "DAILY" | "WEEKLY" | "MONTHLY")}
-            className="w-full px-3 py-2 border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-main)] rounded-lg focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] text-sm cursor-pointer"
-          >
-            <option value="none">Does not repeat</option>
-            <option value="DAILY">Daily</option>
-            <option value="WEEKLY">Weekly</option>
-            <option value="MONTHLY">Monthly</option>
-          </select>
+        <div className="grid grid-cols-2 gap-3" style={{ marginBottom: "4px" }}>
+          <div className="flex flex-col">
+            <label htmlFor="event-repeat" style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-text-muted)", marginBottom: "2px" }}>
+              Repeat
+            </label>
+            <div style={{ position: "relative", width: "100%" }}>
+              <select
+                id="event-repeat"
+                value={repeatType}
+                onChange={(e) => setRepeatType(e.target.value as "none" | "DAILY" | "WEEKLY" | "MONTHLY")}
+                style={{
+                  width: "100%",
+                  padding: "6px 28px 6px 10px",
+                  fontSize: "13px",
+                  fontWeight: 500,
+                  color: "var(--color-text-main)",
+                  border: "1px solid var(--color-border)",
+                  backgroundColor: "var(--color-surface)",
+                  borderRadius: "6px",
+                  outline: "none",
+                  appearance: "none",
+                  cursor: "pointer"
+                }}
+              >
+                <option value="none">Does not repeat</option>
+                <option value="DAILY">Daily</option>
+                <option value="WEEKLY">Weekly</option>
+                <option value="MONTHLY">Monthly</option>
+              </select>
+              <div style={{ pointerEvents: "none", position: "absolute", top: "50%", right: "8px", transform: "translateY(-50%)", color: "var(--color-text-muted)", display: "flex", alignItems: "center" }}>
+                <svg style={{ height: "14px", width: "14px" }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          {repeatType !== "none" ? (
+            <div style={{ display: "flex", gap: "6px", alignItems: "flex-end", width: "100%" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <Input
+                  label="Repeat every"
+                  id="event-repeat-interval"
+                  type="number"
+                  min={1}
+                  value={repeatInterval}
+                  onChange={(e) => setRepeatInterval(Math.max(1, parseInt(e.target.value) || 1))}
+                  wrapperClassName="mb-0"
+                  style={{ borderRadius: "6px", border: "1px solid var(--color-border)", padding: "5px 10px", fontSize: "13px", width: "100%" }}
+                />
+              </div>
+              <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-text-muted)", paddingBottom: "6px", whiteSpace: "nowrap", flexShrink: 0 }}>
+                {repeatInterval === 1
+                  ? (repeatType === "DAILY" ? "day" : repeatType === "WEEKLY" ? "week" : "month")
+                  : (repeatType === "DAILY" ? "days" : repeatType === "WEEKLY" ? "weeks" : "months")
+                }
+              </span>
+            </div>
+          ) : (
+            <div />
+          )}
         </div>
 
         {repeatType !== "none" && (
-          <>
-            <div className="grid grid-cols-2 gap-4">
-              <Input
-                label="Repeat every"
-                id="event-repeat-interval"
-                type="number"
-                min={1}
-                value={repeatInterval}
-                onChange={(e) => setRepeatInterval(Math.max(1, parseInt(e.target.value) || 1))}
-              />
-              <div className="flex items-end pb-3 text-sm font-medium text-[var(--color-text-muted)]">
-                {repeatType === "DAILY" ? "day(s)" : repeatType === "WEEKLY" ? "week(s)" : "month(s)"}
-              </div>
-            </div>
-
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "4px" }}>
             {repeatType === "WEEKLY" && (
-              <div className="flex flex-col space-y-1.5">
-                <span className="text-[var(--color-text-muted)] text-sm font-semibold">Repeat on</span>
-                <div className="flex flex-wrap gap-2">
+              <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-text-muted)" }}>Repeat on</span>
+                <div style={{ display: "flex", gap: "4px" }}>
                   {["SU", "MO", "TU", "WE", "TH", "FR", "SA"].map((day) => {
                     const isSelected = repeatByDay.includes(day);
                     return (
@@ -454,11 +534,22 @@ export const EventForm: React.FC<EventFormProps> = ({
                             setRepeatByDay([...repeatByDay, day]);
                           }
                         }}
-                        className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition border ${
-                          isSelected
-                            ? "bg-[var(--color-primary)] border-[var(--color-primary)] text-white shadow-sm"
-                            : "bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-border-hover)]"
-                        }`}
+                        className="transition"
+                        style={{
+                          display: "flex",
+                          height: "24px",
+                          width: "24px",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          borderRadius: "50%",
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          border: isSelected ? "1px solid var(--color-primary)" : "1px solid var(--color-border)",
+                          backgroundColor: isSelected ? "var(--color-primary)" : "var(--color-surface)",
+                          color: isSelected ? "#FFFFFF" : "var(--color-text-muted)",
+                          boxShadow: isSelected ? "0 1px 3px rgba(59, 111, 224, 0.15)" : "none"
+                        }}
                       >
                         {day.substring(0, 1)}
                       </button>
@@ -466,25 +557,44 @@ export const EventForm: React.FC<EventFormProps> = ({
                   })}
                 </div>
                 {errors.repeatByDay && (
-                  <span className="text-red-500 text-xs mt-1">{errors.repeatByDay}</span>
+                  <span style={{ color: "var(--color-danger)", fontSize: "11px", marginTop: "2px" }}>{errors.repeatByDay}</span>
                 )}
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col space-y-1">
-                <label htmlFor="event-ends-type" className="text-[var(--color-text-muted)] text-sm font-semibold">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col">
+                <label htmlFor="event-ends-type" style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-text-muted)", marginBottom: "2px" }}>
                   Ends
                 </label>
-                <select
-                  id="event-ends-type"
-                  value={endsType}
-                  onChange={(e) => setEndsType(e.target.value as "never" | "on")}
-                  className="w-full px-3 py-2 border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-main)] rounded-lg focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] text-sm cursor-pointer"
-                >
-                  <option value="never">Never</option>
-                  <option value="on">On date</option>
-                </select>
+                <div style={{ position: "relative", width: "100%" }}>
+                  <select
+                    id="event-ends-type"
+                    value={endsType}
+                    onChange={(e) => setEndsType(e.target.value as "never" | "on")}
+                    style={{
+                      width: "100%",
+                      padding: "6px 28px 6px 10px",
+                      fontSize: "13px",
+                      fontWeight: 500,
+                      color: "var(--color-text-main)",
+                      border: "1px solid var(--color-border)",
+                      backgroundColor: "var(--color-surface)",
+                      borderRadius: "6px",
+                      outline: "none",
+                      appearance: "none",
+                      cursor: "pointer"
+                    }}
+                  >
+                    <option value="never">Never</option>
+                    <option value="on">On date</option>
+                  </select>
+                  <div style={{ pointerEvents: "none", position: "absolute", top: "50%", right: "8px", transform: "translateY(-50%)", color: "var(--color-text-muted)", display: "flex", alignItems: "center" }}>
+                    <svg style={{ height: "14px", width: "14px" }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
               </div>
               {endsType === "on" && (
                 <Input
@@ -494,30 +604,43 @@ export const EventForm: React.FC<EventFormProps> = ({
                   value={endsOnDate}
                   onChange={(e) => setEndsOnDate(e.target.value)}
                   error={errors.endsOnDate}
+                  wrapperClassName="mb-0"
+                  style={{ borderRadius: "6px", border: "1px solid var(--color-border)", padding: "5px 10px", fontSize: "13px" }}
                 />
               )}
             </div>
-          </>
+          </div>
         )}
 
-        <div className="flex justify-between items-center pt-4 border-t border-[var(--color-border)]">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "12px", borderTop: "1px solid var(--color-border)", marginTop: "8px" }}>
           {event ? (
             <Button
               type="button"
               variant="danger"
               onClick={handleDeleteClick}
               loading={deleteMutation.isPending}
+              style={{ borderRadius: "8px", fontSize: "12px", padding: "6px 14px" }}
+              className="hover:bg-danger/10 transition"
             >
               Delete
             </Button>
           ) : (
             <div />
           )}
-          <div className="flex space-x-3">
-            <Button type="button" variant="secondary" onClick={onClose}>
+          <div style={{ display: "flex", gap: "10px" }}>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={onClose}
+              style={{ borderRadius: "8px", fontSize: "12px", padding: "6px 14px" }}
+            >
               Cancel
             </Button>
-            <Button type="submit" loading={mutation.isPending}>
+            <Button
+              type="submit"
+              loading={mutation.isPending}
+              style={{ borderRadius: "8px", fontSize: "12px", padding: "6px 18px" }}
+            >
               Save
             </Button>
           </div>

@@ -86,17 +86,24 @@ export const Modal: React.FC<ModalProps> = ({
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-opacity duration-200 ease-out ${
+      className={`fixed inset-0 z-50 transition-opacity duration-200 ease-out ${
         animate ? "opacity-100" : "opacity-0"
       }`}
-      style={{ backgroundColor: "rgba(26, 29, 33, 0.4)" }}
+      style={{
+        backgroundColor: "rgba(26, 29, 33, 0.4)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "24px 16px"
+      }}
       onClick={onClose}
     >
       <div
         ref={modalRef}
-        className={`bg-[var(--color-surface)] border border-[var(--color-border)] w-full max-w-md rounded-2xl shadow-xl transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        className={`bg-[var(--color-surface)] border border-[var(--color-border)] w-full max-w-md shadow-xl transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] ${
           animate ? "scale-100 opacity-100" : "scale-95 opacity-0"
         }`}
+        style={{ borderRadius: "12px", overflow: "hidden" }}
         onClick={(e) => e.stopPropagation()}
       >
         {title && (
@@ -110,7 +117,7 @@ export const Modal: React.FC<ModalProps> = ({
             </button>
           </div>
         )}
-        <div className="px-6 py-6">{children}</div>
+        <div style={{ padding: "16px 24px 24px 24px" }}>{children}</div>
       </div>
     </div>,
     document.body

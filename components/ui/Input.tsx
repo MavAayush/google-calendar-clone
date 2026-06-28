@@ -3,19 +3,21 @@ import React from "react";
 type InputProps = React.InputHTMLAttributes<HTMLInputElement> & {
   label?: string;
   error?: string;
+  wrapperClassName?: string;
 };
 
 export const Input: React.FC<InputProps> = ({
   label,
   error,
   className = "",
+  wrapperClassName = "mb-4",
   id,
   ...props
 }) => {
   return (
-    <div className="flex flex-col mb-4">
+    <div className={`flex flex-col ${wrapperClassName}`}>
       {label && (
-        <label htmlFor={id} className="text-text-secondary text-sm font-semibold mb-1">
+        <label htmlFor={id} className="text-text-secondary text-xs font-semibold mb-1">
           {label}
         </label>
       )}
