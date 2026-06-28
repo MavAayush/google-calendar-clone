@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, addDays } from "date-fns";
 import { Modal } from "@/components/ui/Modal";
@@ -131,7 +131,7 @@ export const EventForm: React.FC<EventFormProps> = ({
   /* eslint-enable react-hooks/exhaustive-deps */
 
   const mutation = useMutation<
-    { id: string; title: string; conflicts?: { title: string }[] },
+    CalendarEvent & { conflicts?: { title: string }[] },
     { message?: string; fields?: Record<string, string> },
     {
       title: string;
@@ -154,7 +154,7 @@ export const EventForm: React.FC<EventFormProps> = ({
     mutationFn: (payload) => {
       const url = event ? `/api/events/${event.id}` : "/api/events";
       const method = event ? "PATCH" : "POST";
-      return request<{ id: string; title: string; conflicts?: { title: string }[] }>(url, {
+      return request<CalendarEvent & { conflicts?: { title: string }[] }>(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -197,7 +197,7 @@ export const EventForm: React.FC<EventFormProps> = ({
       if (variables.editScope || data.isRecurring || data.recurrence) {
         queryClient.invalidateQueries({ queryKey: ["events"] });
       } else {
-        updateQueryCacheWithEvent(queryClient, data as any);
+        updateQueryCacheWithEvent(queryClient, data as CalendarEvent);
       }
       onClose();
 
@@ -231,7 +231,7 @@ export const EventForm: React.FC<EventFormProps> = ({
       if (variables.editScope || event?.isRecurring || event?.recurrence) {
         queryClient.invalidateQueries({ queryKey: ["events"] });
       } else {
-        updateQueryCacheWithEvent(queryClient, event as any, true);
+        updateQueryCacheWithEvent(queryClient, event as CalendarEvent, true);
       }
       showToast("Event deleted successfully", "success");
       onClose();
@@ -341,11 +341,13 @@ export const EventForm: React.FC<EventFormProps> = ({
       setPendingPayload(payload);
       setScopePromptOpen(true);
     } else {
-      const finalPayload: any = { ...payload };
-      if (event && event.isException) {
-        finalPayload.editScope = "THIS";
-        finalPayload.instanceDate = event.id.slice(-10);
-      }
+      const finalPayload = {
+        ...payload,
+        ...(event && event.isException ? {
+          editScope: "THIS" as const,
+          instanceDate: event.id.slice(-10),
+        } : {}),
+      };
       mutation.mutate(finalPayload);
     }
   };

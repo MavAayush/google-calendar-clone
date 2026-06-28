@@ -21,7 +21,7 @@ export const request = async <T>(url: string, config?: RequestInit): Promise<T> 
     const text = await res.text();
     try {
       return JSON.parse(text) as T;
-    } catch (e: any) {
+    } catch {
       throw new Error(`Failed to parse JSON response. Status: ${res.status}. Body: ${text.substring(0, 150)}`);
     }
   }

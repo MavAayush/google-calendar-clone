@@ -1,4 +1,5 @@
 import { fromZonedTime } from "date-fns-tz";
+export { fromZonedTime };
 
 export const toUTC = (
   localDateTimeStr: string,

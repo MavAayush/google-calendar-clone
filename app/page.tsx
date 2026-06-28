@@ -11,6 +11,7 @@ import { useToast } from "@/components/ui/Toast";
 import { toUTC } from "@/lib/date/toUTC";
 import { authClient } from "@/lib/auth/client";
 import { updateQueryCacheWithEvent } from "@/lib/api/cache";
+import Link from "next/link";
 
 interface CalendarEvent {
   id: string;
@@ -102,7 +103,7 @@ export default function Page() {
   }, [isError, error, showToast]);
 
   const moveEventMutation = useMutation<
-    { id: string; title: string; conflicts?: { title: string }[] },
+    CalendarEvent & { conflicts?: { title: string }[] },
     { message?: string },
     {
       event: CalendarEvent;
@@ -114,7 +115,7 @@ export default function Page() {
     { previousQueries: [unknown, unknown][] }
   >({
     mutationFn: ({ event, startTime, endTime, editScope, instanceDate }) => {
-      return request<{ id: string; title: string; conflicts?: { title: string }[] }>(`/api/events/${event.id}`, {
+      return request<CalendarEvent & { conflicts?: { title: string }[] }>(`/api/events/${event.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -156,7 +157,7 @@ export default function Page() {
       if (variables.editScope || data.isRecurring || data.recurrence) {
         queryClient.invalidateQueries({ queryKey: ["events"] });
       } else {
-        updateQueryCacheWithEvent(queryClient, data as any);
+        updateQueryCacheWithEvent(queryClient, data as CalendarEvent);
       }
       if (data.conflicts && data.conflicts.length > 0) {
         const conflictTitles = data.conflicts.map((c) => c.title).join(", ");

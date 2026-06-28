@@ -5,8 +5,29 @@ import { withValidation } from "@/middleware/validate";
 import { eventInputSchema, EventInput } from "@/lib/validation/event";
 import { getCurrentUserId, getCurrentUser } from "@/lib/auth";
 import prisma from "@/lib/db/client";
-import { findConflictingEvents } from "@/lib/db/conflicts";
 import { expandEventSeries, ExpandedInstance, EventWithRecurrence } from "@/lib/recurrence/expand";
+
+interface RawQueryResult {
+  event_data: {
+    id: string;
+    title: string;
+    description: string | null;
+    startTime: string;
+    endTime: string;
+    allDay: boolean;
+    version: number;
+    recurrenceRuleId: string | null;
+  } | null;
+  conflicts_data: {
+    id: string;
+    title: string;
+    description: string | null;
+    startTime: string;
+    endTime: string;
+    allDay: boolean;
+    version: number;
+  }[];
+}
 
 const getEventsQuerySchema = z.object({
   start: z.string().datetime(),
@@ -118,7 +139,7 @@ export const POST = withErrorHandling(
     console.timeEnd("POST_getCurrentUserId");
 
     console.time("POST_db_transaction");
-    const result = await prisma.$queryRaw<any[]>`
+    const result = await prisma.$queryRaw<RawQueryResult[]>`
       WITH conflicts AS (
         SELECT id, title, description, start_time, end_time, all_day, version
         FROM events
@@ -128,7 +149,7 @@ export const POST = withErrorHandling(
       ),
       new_rule AS (
         INSERT INTO recurrence_rules (id, frequency, interval, series_start_date, series_end_date, by_day)
-        SELECT gen_random_uuid(), CAST(${body.recurrenceRule?.frequency || null} AS "Frequency"), CAST(${body.recurrenceRule?.interval || null} AS integer), CAST(${body.recurrenceRule?.seriesStartDate ? new Date(body.recurrenceRule.seriesStartDate) : null} AS date), CAST(${body.recurrenceRule?.seriesEndDate ? new Date(body.recurrenceRule.seriesEndDate) : null} AS date), CAST(${body.recurrenceRule?.byDay ? JSON.stringify(body.recurrenceRule.byDay) : null} AS jsonb)
+        SELECT gen_random_uuid(), CAST(${body.recurrenceRule?.frequency || null} AS "Frequency"), CAST(${body.recurrenceRule?.interval || null} AS integer), CAST(${body.recurrenceRule ? new Date(body.startTime) : null} AS date), CAST(${body.recurrenceRule?.seriesEndDate ? new Date(body.recurrenceRule.seriesEndDate) : null} AS date), CAST(${body.recurrenceRule?.byDay ? JSON.stringify(body.recurrenceRule.byDay) : null} AS jsonb)
         WHERE CAST(${!!body.recurrenceRule} AS boolean) = true
         RETURNING id
       ),
@@ -179,7 +200,7 @@ export const POST = withErrorHandling(
       );
     }
 
-    const conflicts = conflictsData.map((e: any) => ({
+    const conflicts = conflictsData.map((e) => ({
       id: e.id,
       title: e.title,
       description: e.description,

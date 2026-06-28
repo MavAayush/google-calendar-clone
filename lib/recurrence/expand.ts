@@ -3,7 +3,7 @@ import { formatInTimeZone } from "@/lib/date/formatInTimeZone";
 import { toUTC } from "@/lib/date/toUTC";
 import { toLocal } from "@/lib/date/toLocal";
 import { Event, RecurrenceRule, RecurrenceException } from "@prisma/client";
-import { fromZonedTime } from "date-fns-tz";
+import { fromZonedTime } from "@/lib/date/toUTC";
 
 export type EventWithRecurrence = Event & {
   recurrenceRule: RecurrenceRule | null;

@@ -52,7 +52,7 @@ export const getCurrentUser = async (request: Request): Promise<AuthUser> => {
         algorithms: ["HS256"],
       });
 
-      const userPayload = (payload as any).user;
+      const userPayload = (payload as Record<string, unknown>).user as { email?: string; name?: string } | undefined;
       if (userPayload && userPayload.email) {
         const email = userPayload.email;
         
@@ -80,8 +80,9 @@ export const getCurrentUser = async (request: Request): Promise<AuthUser> => {
         }
         return cachedUser;
       }
-    } catch (err: any) {
-      console.warn("[getCurrentUser] Local session_data verification failed:", err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn("[getCurrentUser] Local session_data verification failed:", message);
     }
   }
 
@@ -93,8 +94,9 @@ export const getCurrentUser = async (request: Request): Promise<AuthUser> => {
   if (sessionTokenCookie && sessionTokenCookie.startsWith("eyJ")) {
     try {
       const { payload } = await jwtVerify(sessionTokenCookie, JWKS);
-      const email = (payload as any).email || (payload as any).sub;
+      const email = ((payload as Record<string, unknown>).email || (payload as Record<string, unknown>).sub) as string | undefined;
       if (email) {
+        // Resolve from in-memory cache (0 network/DB calls!)
         let cachedUser = userCache.get(email);
         if (!cachedUser) {
           let user = await prisma.user.findUnique({
@@ -119,8 +121,9 @@ export const getCurrentUser = async (request: Request): Promise<AuthUser> => {
         }
         return cachedUser;
       }
-    } catch (err: any) {
-      console.warn("[getCurrentUser] Local OIDC JWT verification failed:", err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn("[getCurrentUser] Local OIDC JWT verification failed:", message);
     }
   }
 

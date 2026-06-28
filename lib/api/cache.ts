@@ -34,7 +34,7 @@ export function updateQueryCacheWithEvent(
       query.queryKey[0] === "events" &&
       query.state.data
     ) {
-      const [_, _view, startStr, endStr] = query.queryKey as [string, string, string, string];
+      const [, , startStr, endStr] = query.queryKey as [string, string, string, string];
 
       const queryStart = new Date(startStr);
       const queryEnd = new Date(endStr);
@@ -45,13 +45,13 @@ export function updateQueryCacheWithEvent(
       const overlaps = eventStart < queryEnd && eventEnd > queryStart;
 
       if (overlaps && !isDelete) {
-        queryClient.setQueryData(query.queryKey, (old: any) => {
+        queryClient.setQueryData(query.queryKey, (old: { events: CalendarEvent[] } | undefined) => {
           if (!old || !old.events) return old;
-          const exists = old.events.some((e: any) => e.id === newEvent.id);
+          const exists = old.events.some((e: CalendarEvent) => e.id === newEvent.id);
           if (exists) {
             return {
               ...old,
-              events: old.events.map((e: any) =>
+              events: old.events.map((e: CalendarEvent) =>
                 e.id === newEvent.id ? { ...e, ...newEvent } : e
               ),
             };
@@ -63,11 +63,11 @@ export function updateQueryCacheWithEvent(
           }
         });
       } else {
-        queryClient.setQueryData(query.queryKey, (old: any) => {
+        queryClient.setQueryData(query.queryKey, (old: { events: CalendarEvent[] } | undefined) => {
           if (!old || !old.events) return old;
           return {
             ...old,
-            events: old.events.filter((e: any) => e.id !== newEvent.id),
+            events: old.events.filter((e: CalendarEvent) => e.id !== newEvent.id),
           };
         });
       }
