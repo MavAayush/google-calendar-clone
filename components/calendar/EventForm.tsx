@@ -11,6 +11,7 @@ import { toLocal } from "@/lib/date/toLocal";
 import { recurrenceInputSchema } from "@/lib/validation/recurrence";
 import { CalendarEvent } from "./CalendarGrid";
 import { EditScopePrompt } from "./EditScopePrompt";
+import { updateQueryCacheWithEvent } from "@/lib/api/cache";
 
 interface EventFormProps {
   isOpen: boolean;
@@ -192,8 +193,12 @@ export const EventForm: React.FC<EventFormProps> = ({
         showToast(err.message || "Failed to save event", "error");
       }
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["events"] });
+    onSuccess: (data, variables) => {
+      if (variables.editScope || data.isRecurring || data.recurrence) {
+        queryClient.invalidateQueries({ queryKey: ["events"] });
+      } else {
+        updateQueryCacheWithEvent(queryClient, data as any);
+      }
       onClose();
 
       if (data.conflicts && data.conflicts.length > 0) {
@@ -222,8 +227,12 @@ export const EventForm: React.FC<EventFormProps> = ({
         method: "DELETE",
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["events"] });
+    onSuccess: (data, variables) => {
+      if (variables.editScope || event?.isRecurring || event?.recurrence) {
+        queryClient.invalidateQueries({ queryKey: ["events"] });
+      } else {
+        updateQueryCacheWithEvent(queryClient, event as any, true);
+      }
       showToast("Event deleted successfully", "success");
       onClose();
     },

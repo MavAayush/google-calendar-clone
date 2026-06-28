@@ -9,8 +9,8 @@ import { EventForm } from "@/components/calendar/EventForm";
 import { request } from "@/lib/api/request";
 import { useToast } from "@/components/ui/Toast";
 import { toUTC } from "@/lib/date/toUTC";
-import Link from "next/link";
 import { authClient } from "@/lib/auth/client";
+import { updateQueryCacheWithEvent } from "@/lib/api/cache";
 
 interface CalendarEvent {
   id: string;
@@ -152,8 +152,12 @@ export default function Page() {
       }
       showToast(err.message || "Failed to move event", "error");
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["events"] });
+    onSuccess: (data, variables) => {
+      if (variables.editScope || data.isRecurring || data.recurrence) {
+        queryClient.invalidateQueries({ queryKey: ["events"] });
+      } else {
+        updateQueryCacheWithEvent(queryClient, data as any);
+      }
       if (data.conflicts && data.conflicts.length > 0) {
         const conflictTitles = data.conflicts.map((c) => c.title).join(", ");
         showToast(`Moved, but overlaps with: ${conflictTitles}`, "warning");
