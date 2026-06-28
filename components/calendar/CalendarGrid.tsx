@@ -161,8 +161,8 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm">
-      <div className="flex border-b border-[var(--color-border)] bg-[var(--color-bg-app)]">
-        <div className="w-16 flex-shrink-0" />
+      <div className="flex border-b border-[var(--color-border)] bg-[var(--color-bg-app)] overflow-y-scroll">
+        <div style={{ width: "64px", minWidth: "64px", maxWidth: "64px" }} className="flex-shrink-0 border-r border-[var(--color-border)]" />
         <div className="flex flex-1">
           {days.map((day) => {
             const isToday = format(day, "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd");
@@ -191,8 +191,8 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
         </div>
       </div>
 
-      <div className="flex flex-1 overflow-y-auto">
-        <div className="w-16 flex-shrink-0 border-r border-[var(--color-border)] bg-[var(--color-bg-app)] select-none">
+      <div className="flex flex-1 overflow-y-scroll">
+        <div style={{ width: "64px", minWidth: "64px", maxWidth: "64px" }} className="flex-shrink-0 border-r border-[var(--color-border)] bg-[var(--color-bg-app)] select-none">
           {hours.map((hour) => (
             <div key={hour} className="h-[60px] pr-2 text-right text-[10px] font-semibold text-[var(--color-text-muted)] pt-1">
               {hour > 0 ? formatHour(hour) : ""}
