@@ -24,13 +24,19 @@ export const GET = withErrorHandling(async (request: Request): Promise<Response>
   });
 
   const { start, end } = parsedQuery;
+  console.time("GET_total");
+  console.time("GET_getCurrentUserId");
   const userId = await getCurrentUserId(request);
+  console.timeEnd("GET_getCurrentUserId");
 
+  console.time("GET_user_timezone");
   const user = await prisma.user.findUnique({
     where: { id: userId },
   });
   const timezone = user?.timezone || "UTC";
+  console.timeEnd("GET_user_timezone");
 
+  console.time("GET_db_events");
   const dbEvents = await prisma.event.findMany({
     where: {
       userId,
@@ -68,7 +74,9 @@ export const GET = withErrorHandling(async (request: Request): Promise<Response>
       },
     },
   });
+  console.timeEnd("GET_db_events");
 
+  console.time("GET_expansion");
   const results: ExpandedInstance[] = [];
 
   for (const e of dbEvents) {
@@ -100,23 +108,30 @@ export const GET = withErrorHandling(async (request: Request): Promise<Response>
       results.push(...expanded);
     }
   }
+  console.timeEnd("GET_expansion");
+  console.timeEnd("GET_total");
 
   return NextResponse.json({ events: results });
 });
 
 export const POST = withErrorHandling(
   withValidation(eventInputSchema, async (request: Request, body: EventInput): Promise<Response> => {
-    console.log("POST /api/events hit. Request Body:", body);
+    console.time("POST_total");
+    console.time("POST_getCurrentUserId");
     const userId = await getCurrentUserId(request);
+    console.timeEnd("POST_getCurrentUserId");
 
+    console.time("POST_find_conflicts");
     const conflicts = await findConflictingEvents(
       userId,
       new Date(body.startTime),
       new Date(body.endTime)
     );
+    console.timeEnd("POST_find_conflicts");
 
     let recurrenceRuleId: string | undefined = undefined;
 
+    console.time("POST_db_write");
     if (body.recurrenceRule) {
       const rec = await prisma.recurrenceRule.create({
         data: {
@@ -144,6 +159,7 @@ export const POST = withErrorHandling(
         recurrenceRule: true,
       },
     });
+    console.timeEnd("POST_db_write");
 
     const formattedEvent = {
       id: event.id,
@@ -166,6 +182,7 @@ export const POST = withErrorHandling(
     };
 
     const status = conflicts.length > 0 ? 200 : 201;
+    console.timeEnd("POST_total");
     return NextResponse.json(formattedEvent, { status });
   })
 );
