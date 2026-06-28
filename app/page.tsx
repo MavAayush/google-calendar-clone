@@ -7,7 +7,6 @@ import { CalendarGrid } from "@/components/calendar/CalendarGrid";
 import { MonthGrid } from "@/components/calendar/MonthGrid";
 import { EventForm } from "@/components/calendar/EventForm";
 import { request } from "@/lib/api/request";
-import { EditScopePrompt } from "@/components/calendar/EditScopePrompt";
 import { useToast } from "@/components/ui/Toast";
 import { toUTC } from "@/lib/date/toUTC";
 import Link from "next/link";
@@ -55,12 +54,7 @@ export default function Page() {
   const [currentDate, setCurrentDate] = useState<Date>(new Date("2026-07-01"));
   const [isFormOpen, setFormOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
-  const [pendingRecurrenceAction, setPendingRecurrenceAction] = useState<{
-    type: "move" | "resize";
-    event: CalendarEvent;
-    newStart?: Date;
-    newEnd: Date;
-  } | null>(null);
+  const [moveAllRecurring, setMoveAllRecurring] = useState(false);
   const { show: showToast } = useToast();
 
   const handleSignOut = async () => {
@@ -229,7 +223,7 @@ export default function Page() {
 
   const handleEventMove = (event: CalendarEvent, newStart: Date, newEnd: Date) => {
     if (event.isRecurring && !event.isException) {
-      setPendingRecurrenceAction({ type: "move", event, newStart, newEnd });
+      executeEventMove(event, newStart, newEnd, moveAllRecurring ? "ALL" : "THIS");
     } else {
       executeEventMove(event, newStart, newEnd, event.isException ? "THIS" : undefined);
     }
@@ -237,7 +231,7 @@ export default function Page() {
 
   const handleEventResize = (event: CalendarEvent, newEnd: Date) => {
     if (event.isRecurring && !event.isException) {
-      setPendingRecurrenceAction({ type: "resize", event, newEnd });
+      executeEventResize(event, newEnd, moveAllRecurring ? "ALL" : "THIS");
     } else {
       executeEventResize(event, newEnd, event.isException ? "THIS" : undefined);
     }
@@ -780,7 +774,26 @@ export default function Page() {
             </div>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-3" style={{ borderBottom: "1px solid var(--color-border)", paddingBottom: "16px" }}>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
+              Preferences
+            </h3>
+            <div className="space-y-2.5">
+              <label className="flex items-center space-x-3 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={moveAllRecurring}
+                  onChange={(e) => setMoveAllRecurring(e.target.checked)}
+                  className="h-4.5 w-4.5 rounded border-[var(--color-border)] text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer"
+                />
+                <span className="text-sm font-medium text-[var(--color-text-main)] group-hover:text-[var(--color-primary)] transition">
+                  Move all recurring events
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <div className="space-y-3" style={{ marginTop: "16px" }}>
             <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
               My Calendars
             </h3>
@@ -854,30 +867,6 @@ export default function Page() {
         event={editingEvent || undefined}
       />
 
-      {pendingRecurrenceAction && (
-        <EditScopePrompt
-          isOpen={!!pendingRecurrenceAction}
-          onClose={() => setPendingRecurrenceAction(null)}
-          onConfirm={(scope) => {
-            if (pendingRecurrenceAction.type === "move") {
-              executeEventMove(
-                pendingRecurrenceAction.event,
-                pendingRecurrenceAction.newStart!,
-                pendingRecurrenceAction.newEnd,
-                scope
-              );
-            } else {
-              executeEventResize(
-                pendingRecurrenceAction.event,
-                pendingRecurrenceAction.newEnd,
-                scope
-              );
-            }
-            setPendingRecurrenceAction(null);
-          }}
-          actionType="edit"
-        />
-      )}
     </div>
   );
 }
