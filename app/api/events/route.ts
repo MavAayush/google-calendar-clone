@@ -106,6 +106,7 @@ export const GET = withErrorHandling(async (request: Request): Promise<Response>
 
 export const POST = withErrorHandling(
   withValidation(eventInputSchema, async (request: Request, body: EventInput): Promise<Response> => {
+    console.log("POST /api/events hit. Request Body:", body);
     const userId = await getCurrentUserId(request);
 
     const conflicts = await findConflictingEvents(

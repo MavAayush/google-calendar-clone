@@ -18,12 +18,18 @@ export const request = async <T>(url: string, config?: RequestInit): Promise<T> 
   }
 
   if (res.ok) {
-    return res.json() as Promise<T>;
+    const text = await res.text();
+    try {
+      return JSON.parse(text) as T;
+    } catch (e: any) {
+      throw new Error(`Failed to parse JSON response. Status: ${res.status}. Body: ${text.substring(0, 150)}`);
+    }
   }
 
   let errorBody: { error?: { code?: string; message?: string; fields?: Record<string, string> | null } } | undefined;
   try {
-    errorBody = await res.json();
+    const errorText = await res.text();
+    errorBody = JSON.parse(errorText);
   } catch {
     // Fail silently
   }
