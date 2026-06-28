@@ -68,7 +68,10 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
     const rect = e.currentTarget.getBoundingClientRect();
     const dropY = e.clientY - rect.top;
 
-    const hourFraction = dropY / 60;
+    const grabOffset = Number(e.dataTransfer.getData("grab-offset") || 0);
+    const cardTopY = dropY - grabOffset;
+
+    const hourFraction = cardTopY / 60;
     const dropMinutes = Math.round(hourFraction * 60);
     const roundedMinutes = Math.round(dropMinutes / 15) * 15;
 
@@ -278,7 +281,12 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                         key={event.id}
                         id={`event-card-${event.id}`}
                         draggable={true}
-                        onDragStart={(e) => e.dataTransfer.setData("text/plain", event.id)}
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData("text/plain", event.id);
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const grabOffset = e.clientY - rect.top;
+                          e.dataTransfer.setData("grab-offset", String(grabOffset));
+                        }}
                         onClick={(e) => {
                           if (ignoreNextClickRef.current) {
                             e.stopPropagation();
