@@ -14,6 +14,8 @@ export class UnauthorizedError extends Error {
 const jwksUrl = `${process.env.NEON_AUTH_BASE_URL}/jwt`;
 const JWKS = createRemoteJWKSet(new URL(jwksUrl));
 
+const userCache = new Map<string, string>();
+
 const getCookies = (request: Request): Record<string, string> => {
   const cookieHeader = request.headers.get("cookie");
   if (!cookieHeader) return {};
@@ -47,20 +49,26 @@ export const getCurrentUserId = async (request: Request): Promise<string> => {
       const userPayload = (payload as any).user;
       if (userPayload && userPayload.email) {
         const email = userPayload.email;
-        let user = await prisma.user.findUnique({
-          where: { email },
-        });
-
-        if (!user) {
-          user = await prisma.user.create({
-            data: {
-              email,
-              displayName: userPayload.name || email.split("@")[0],
-              timezone: "UTC",
-            },
+        
+        let userId = userCache.get(email);
+        if (!userId) {
+          let user = await prisma.user.findUnique({
+            where: { email },
           });
+
+          if (!user) {
+            user = await prisma.user.create({
+              data: {
+                email,
+                displayName: userPayload.name || email.split("@")[0],
+                timezone: "UTC",
+              },
+            });
+          }
+          userId = user.id;
+          userCache.set(email, userId);
         }
-        return user.id;
+        return userId;
       }
     } catch (err: any) {
       console.warn("[getCurrentUserId] Local session_data verification failed:", err.message);
@@ -77,20 +85,25 @@ export const getCurrentUserId = async (request: Request): Promise<string> => {
       const { payload } = await jwtVerify(sessionTokenCookie, JWKS);
       const email = (payload as any).email || (payload as any).sub;
       if (email) {
-        let user = await prisma.user.findUnique({
-          where: { email },
-        });
-
-        if (!user) {
-          user = await prisma.user.create({
-            data: {
-              email,
-              displayName: email.split("@")[0],
-              timezone: "UTC",
-            },
+        let userId = userCache.get(email);
+        if (!userId) {
+          let user = await prisma.user.findUnique({
+            where: { email },
           });
+
+          if (!user) {
+            user = await prisma.user.create({
+              data: {
+                email,
+                displayName: email.split("@")[0],
+                timezone: "UTC",
+              },
+            });
+          }
+          userId = user.id;
+          userCache.set(email, userId);
         }
-        return user.id;
+        return userId;
       }
     } catch (err: any) {
       console.warn("[getCurrentUserId] Local OIDC JWT verification failed:", err.message);
@@ -104,19 +117,25 @@ export const getCurrentUserId = async (request: Request): Promise<string> => {
     throw new UnauthorizedError();
   }
 
-  let user = await prisma.user.findUnique({
-    where: { email: session.user.email },
-  });
-
-  if (!user) {
-    user = await prisma.user.create({
-      data: {
-        email: session.user.email,
-        displayName: session.user.name || session.user.email.split("@")[0],
-        timezone: "UTC",
-      },
+  const email = session.user.email;
+  let userId = userCache.get(email);
+  if (!userId) {
+    let user = await prisma.user.findUnique({
+      where: { email },
     });
+
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          email,
+          displayName: session.user.name || email.split("@")[0],
+          timezone: "UTC",
+        },
+      });
+    }
+    userId = user.id;
+    userCache.set(email, userId);
   }
 
-  return user.id;
+  return userId;
 };
