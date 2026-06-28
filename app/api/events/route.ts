@@ -139,96 +139,84 @@ export const POST = withErrorHandling(
     console.timeEnd("POST_getCurrentUserId");
 
     console.time("POST_db_transaction");
-    const result = await prisma.$queryRaw<RawQueryResult[]>`
-      WITH conflicts AS (
-        SELECT id, title, description, start_time, end_time, all_day, version
-        FROM events
-        WHERE user_id = CAST(${userId} AS uuid)
-          AND start_time < CAST(${new Date(body.endTime)} AS timestamptz)
-          AND end_time > CAST(${new Date(body.startTime)} AS timestamptz)
-      ),
-      new_rule AS (
-        INSERT INTO recurrence_rules (id, frequency, interval, series_start_date, series_end_date, by_day)
-        SELECT gen_random_uuid(), CAST(${body.recurrenceRule?.frequency || null} AS "Frequency"), CAST(${body.recurrenceRule?.interval || null} AS integer), CAST(${body.recurrenceRule ? new Date(body.startTime) : null} AS date), CAST(${body.recurrenceRule?.seriesEndDate ? new Date(body.recurrenceRule.seriesEndDate) : null} AS date), CAST(${body.recurrenceRule?.byDay ? JSON.stringify(body.recurrenceRule.byDay) : null} AS jsonb)
-        WHERE CAST(${!!body.recurrenceRule} AS boolean) = true
-        RETURNING id
-      ),
-      inserted_event AS (
-        INSERT INTO events (id, user_id, title, description, start_time, end_time, all_day, recurrence_rule_id, version)
-        SELECT 
-          gen_random_uuid(),
-          CAST(${userId} AS uuid),
-          CAST(${body.title} AS varchar),
-          CAST(${body.description || null} AS text),
-          CAST(${new Date(body.startTime)} AS timestamptz),
-          CAST(${new Date(body.endTime)} AS timestamptz),
-          CAST(${body.allDay} AS boolean),
-          (SELECT id FROM new_rule LIMIT 1),
-          1
-        RETURNING *
-      )
-      SELECT 
-        (SELECT json_build_object(
-          'id', id,
-          'title', title,
-          'description', description,
-          'startTime', start_time,
-          'endTime', end_time,
-          'allDay', all_day,
-          'version', version,
-          'recurrenceRuleId', recurrence_rule_id
-        ) FROM inserted_event) as event_data,
-        (SELECT coalesce(json_agg(json_build_object(
-          'id', id,
-          'title', title,
-          'description', description,
-          'startTime', start_time,
-          'endTime', end_time,
-          'allDay', all_day,
-          'version', version
-        )), '[]'::json) FROM conflicts) as conflicts_data;
-    `;
+    const { event, conflicts } = await prisma.$transaction(async (tx) => {
+      const t0 = Date.now();
+      const dbConflicts = await tx.event.findMany({
+        where: {
+          userId,
+          startTime: { lt: new Date(body.endTime) },
+          endTime: { gt: new Date(body.startTime) },
+        },
+      });
+      console.log("conflict_check:", Date.now() - t0);
+
+      const conflictsMapped = dbConflicts.map((e) => ({
+        id: e.id,
+        title: e.title,
+        description: e.description,
+        startTime: e.startTime.toISOString(),
+        endTime: e.endTime.toISOString(),
+        allDay: e.allDay,
+        isRecurring: false,
+        recurrence: null,
+        version: e.version,
+      }));
+
+      let recurrenceRuleId: string | undefined = undefined;
+
+      const t1 = Date.now();
+      if (body.recurrenceRule) {
+        const rec = await tx.recurrenceRule.create({
+          data: {
+            frequency: body.recurrenceRule.frequency,
+            interval: body.recurrenceRule.interval,
+            seriesStartDate: new Date(body.startTime),
+            seriesEndDate: body.recurrenceRule.seriesEndDate ? new Date(body.recurrenceRule.seriesEndDate) : null,
+            byDay: body.recurrenceRule.byDay || undefined,
+          },
+        });
+        recurrenceRuleId = rec.id;
+      }
+      console.log("rule_create:", Date.now() - t1);
+
+      const t2 = Date.now();
+      const createdEvent = await tx.event.create({
+        data: {
+          userId,
+          title: body.title,
+          description: body.description || null,
+          startTime: new Date(body.startTime),
+          endTime: new Date(body.endTime),
+          allDay: body.allDay,
+          recurrenceRuleId,
+        },
+        include: {
+          recurrenceRule: true,
+        },
+      });
+      console.log("event_create:", Date.now() - t2);
+
+      return { event: createdEvent, conflicts: conflictsMapped };
+    });
     console.timeEnd("POST_db_transaction");
 
-    const rawEvent = result[0]?.event_data;
-    const conflictsData = result[0]?.conflicts_data || [];
-
-    if (!rawEvent) {
-      return new Response(
-        JSON.stringify({ error: { message: "Failed to create event" } }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    const conflicts = conflictsData.map((e) => ({
-      id: e.id,
-      title: e.title,
-      description: e.description,
-      startTime: new Date(e.startTime).toISOString(),
-      endTime: new Date(e.endTime).toISOString(),
-      allDay: e.allDay,
-      isRecurring: false,
-      recurrence: null,
-      version: e.version,
-    }));
-
     const formattedEvent = {
-      id: rawEvent.id,
-      title: rawEvent.title,
-      description: rawEvent.description,
-      startTime: new Date(rawEvent.startTime).toISOString(),
-      endTime: new Date(rawEvent.endTime).toISOString(),
-      allDay: rawEvent.allDay,
-      isRecurring: !!rawEvent.recurrenceRuleId,
-      recurrence: body.recurrenceRule ? {
-        frequency: body.recurrenceRule.frequency,
-        interval: body.recurrenceRule.interval,
-        seriesEndDate: body.recurrenceRule.seriesEndDate
-          ? new Date(body.recurrenceRule.seriesEndDate).toISOString().split("T")[0]
+      id: event.id,
+      title: event.title,
+      description: event.description,
+      startTime: event.startTime.toISOString(),
+      endTime: event.endTime.toISOString(),
+      allDay: event.allDay,
+      isRecurring: !!event.recurrenceRule,
+      recurrence: event.recurrenceRule ? {
+        frequency: event.recurrenceRule.frequency,
+        interval: event.recurrenceRule.interval,
+        seriesEndDate: event.recurrenceRule.seriesEndDate
+          ? event.recurrenceRule.seriesEndDate.toISOString().split("T")[0]
           : null,
-        byDay: body.recurrenceRule.byDay || null,
+        byDay: event.recurrenceRule.byDay,
       } : null,
-      version: rawEvent.version,
+      version: event.version,
       conflicts,
     };
 
