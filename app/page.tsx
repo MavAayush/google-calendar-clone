@@ -52,7 +52,7 @@ export default function Page() {
   }, []);
 
   const [view, setView] = useState<"day" | "week" | "month">("week");
-  const [currentDate, setCurrentDate] = useState<Date>(new Date("2026-07-01"));
+  const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [isFormOpen, setFormOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [moveAllRecurring, setMoveAllRecurring] = useState(false);
