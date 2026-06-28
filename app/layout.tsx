@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "dragula/dist/dragula.css";
 import { ToastProvider } from "@/components/ui/Toast";
 import { QueryProvider } from "@/lib/providers/QueryProvider";
 

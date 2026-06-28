@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { startOfWeek, addDays, format, startOfDay, endOfDay } from "date-fns";
 import { computeEventLayout } from "@/lib/date/layout";
 
@@ -50,40 +50,108 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
     tempHeight: number;
     isTop: boolean;
   } | null>(null);
-  const [activeDragDay, setActiveDragDay] = useState<string | null>(null);
   const ignoreNextClickRef = useRef(false);
+
+  const eventsRef = useRef(events);
+  useEffect(() => {
+    eventsRef.current = events;
+  }, [events]);
+
+  const onEventMoveRef = useRef(onEventMove);
+  useEffect(() => {
+    onEventMoveRef.current = onEventMove;
+  }, [onEventMove]);
+
+  const lastMousePosRef = useRef({ x: 0, y: 0 });
+  const grabOffsetRef = useRef(0);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let isMounted = true;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let drake: any = null;
+    let handleMouseMove: ((e: MouseEvent) => void) | null = null;
+    let handleTouchMove: ((e: TouchEvent) => void) | null = null;
+
+    import("dragula").then(({ default: dragula }) => {
+      if (!isMounted) return;
+
+      handleMouseMove = (e: MouseEvent) => {
+        lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+      };
+      handleTouchMove = (e: TouchEvent) => {
+        const touch = e.touches[0];
+        if (touch) {
+          lastMousePosRef.current = { x: touch.clientX, y: touch.clientY };
+        }
+      };
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("touchmove", handleTouchMove);
+
+      const columns = Array.from(document.querySelectorAll(".dragula-day-column")) as HTMLElement[];
+      if (columns.length === 0) {
+        if (handleMouseMove) window.removeEventListener("mousemove", handleMouseMove);
+        if (handleTouchMove) window.removeEventListener("touchmove", handleTouchMove);
+        return;
+      }
+
+      drake = dragula(columns, {
+        direction: "vertical",
+        invalid: (el, handle) => {
+          if (
+            handle?.classList.contains("cursor-n-resize") ||
+            handle?.classList.contains("cursor-s-resize")
+          ) {
+            return true;
+          }
+          return false;
+        },
+      });
+
+      drake.on("drop", (el: HTMLElement, target: HTMLElement) => {
+        drake.cancel(true);
+
+        const eventId = el.getAttribute("data-event-id");
+        const dayStr = target.getAttribute("data-day");
+        if (!eventId || !dayStr) return;
+
+        const draggedEvent = eventsRef.current.find((ev) => ev.id === eventId);
+        if (!draggedEvent) return;
+
+        const day = new Date(dayStr);
+        const rect = target.getBoundingClientRect();
+        const dropY = lastMousePosRef.current.y - rect.top;
+        const grabOffset = grabOffsetRef.current;
+        const cardTopY = dropY - grabOffset;
+
+        const hourFraction = cardTopY / 60;
+        const dropMinutes = Math.round(hourFraction * 60);
+        const roundedMinutes = Math.round(dropMinutes / 15) * 15;
+
+        const newStart = new Date(day);
+        newStart.setHours(0, 0, 0, 0);
+        newStart.setMinutes(roundedMinutes);
+
+        const durationMs = new Date(draggedEvent.endTime).getTime() - new Date(draggedEvent.startTime).getTime();
+        const newEnd = new Date(newStart.getTime() + durationMs);
+
+        onEventMoveRef.current(draggedEvent, newStart, newEnd);
+      });
+    });
+
+    return () => {
+      isMounted = false;
+      if (handleMouseMove) window.removeEventListener("mousemove", handleMouseMove);
+      if (handleTouchMove) window.removeEventListener("touchmove", handleTouchMove);
+      if (drake) drake.destroy();
+    };
+  }, [currentDate, view]);
 
   const formatHour = (hour: number) => {
     if (hour === 0) return "12 AM";
     if (hour === 12) return "12 PM";
     return hour > 12 ? `${hour - 12} PM` : `${hour} AM`;
-  };
-
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>, day: Date) => {
-    e.preventDefault();
-    setActiveDragDay(null);
-    const eventId = e.dataTransfer.getData("text/plain");
-    const draggedEvent = events.find((ev) => ev.id === eventId);
-    if (!draggedEvent) return;
-
-    const rect = e.currentTarget.getBoundingClientRect();
-    const dropY = e.clientY - rect.top;
-
-    const grabOffset = Number(e.dataTransfer.getData("grab-offset") || 0);
-    const cardTopY = dropY - grabOffset;
-
-    const hourFraction = cardTopY / 60;
-    const dropMinutes = Math.round(hourFraction * 60);
-    const roundedMinutes = Math.round(dropMinutes / 15) * 15;
-
-    const newStart = new Date(day);
-    newStart.setHours(0, 0, 0, 0);
-    newStart.setMinutes(roundedMinutes);
-
-    const durationMs = new Date(draggedEvent.endTime).getTime() - new Date(draggedEvent.startTime).getTime();
-    const newEnd = new Date(newStart.getTime() + durationMs);
-
-    onEventMove(draggedEvent, newStart, newEnd);
   };
 
   const handleResizeStart = (
@@ -102,9 +170,6 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
     const startHeight = originalHeight;
     const startTime = new Date(event.startTime);
     const endTime = new Date(event.endTime);
-
-    const card = document.getElementById(`event-card-${event.id}`);
-    if (card) card.setAttribute("draggable", "false");
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       ignoreNextClickRef.current = true;
@@ -125,8 +190,6 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
       window.removeEventListener("mouseup", handleMouseUp);
 
       const deltaY = upEvent.clientY - startY;
-      const card = document.getElementById(`event-card-${event.id}`);
-      if (card) card.setAttribute("draggable", "true");
 
       if (ignoreNextClickRef.current) {
         setTimeout(() => {
@@ -232,17 +295,8 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
               return (
                 <div
                   key={day.toISOString()}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    if (activeDragDay !== day.toISOString()) {
-                      setActiveDragDay(day.toISOString());
-                    }
-                  }}
-                  onDragLeave={() => setActiveDragDay(null)}
-                  onDrop={(e) => handleDrop(e, day)}
-                  className={`relative flex-1 h-full border-r border-[var(--color-border)] last:border-r-0 transition-colors duration-200 ${
-                    activeDragDay === day.toISOString() ? "bg-[var(--color-primary)]/[0.03]" : ""
-                  }`}
+                  className="relative flex-1 h-full border-r border-[var(--color-border)] last:border-r-0 transition-colors duration-200 dragula-day-column"
+                  data-day={day.toISOString()}
                 >
                   {dayEvents.map((event) => {
                     const layout = layouts.find((l) => l.id === event.id);
@@ -281,12 +335,18 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                       <div
                         key={event.id}
                         id={`event-card-${event.id}`}
-                        draggable={true}
-                        onDragStart={(e) => {
-                          e.dataTransfer.setData("text/plain", event.id);
+                        data-event-id={event.id}
+                        onMouseDown={(e) => {
+                          if (e.button !== 0) return;
                           const rect = e.currentTarget.getBoundingClientRect();
-                          const grabOffset = e.clientY - rect.top;
-                          e.dataTransfer.setData("grab-offset", String(grabOffset));
+                          grabOffsetRef.current = e.clientY - rect.top;
+                        }}
+                        onTouchStart={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const touch = e.touches[0];
+                          if (touch) {
+                            grabOffsetRef.current = touch.clientY - rect.top;
+                          }
                         }}
                         onClick={(e) => {
                           if (ignoreNextClickRef.current) {
@@ -296,7 +356,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                           }
                           onEventClick(event);
                         }}
-                        className="absolute p-2 rounded-lg bg-[var(--color-primary-light)] border-l-4 border-[var(--color-primary)] text-[var(--color-primary)] shadow-sm cursor-pointer hover:shadow-md select-none hover:scale-[1.01] active:opacity-60"
+                        className="dragula-event-card absolute p-2 rounded-lg bg-[var(--color-primary-light)] border-l-4 border-[var(--color-primary)] text-[var(--color-primary)] shadow-sm cursor-pointer hover:shadow-md select-none hover:scale-[1.01] active:opacity-60"
                         style={{
                           top: `${top}px`,
                           height: `${height}px`,
@@ -308,16 +368,6 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                         <div
                           className="absolute top-0 left-0 right-0 h-3 cursor-n-resize hover:bg-black/10 transition-colors select-none z-20"
                           onMouseDown={(e) => handleResizeStart(e, event, originalTop, originalHeight, true)}
-                          onMouseEnter={(e) => {
-                            const cardEl = e.currentTarget.closest("[draggable]");
-                            if (cardEl) cardEl.setAttribute("draggable", "false");
-                          }}
-                          onMouseLeave={(e) => {
-                            if (!resizing) {
-                              const cardEl = e.currentTarget.closest("[draggable]");
-                              if (cardEl) cardEl.setAttribute("draggable", "true");
-                            }
-                          }}
                         />
                         <div className="font-semibold text-xs truncate leading-tight">
                           {event.title}
@@ -330,16 +380,6 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                         <div
                           className="absolute bottom-0 left-0 right-0 h-3 cursor-s-resize hover:bg-black/10 transition-colors select-none z-20"
                           onMouseDown={(e) => handleResizeStart(e, event, originalTop, originalHeight, false)}
-                          onMouseEnter={(e) => {
-                            const cardEl = e.currentTarget.closest("[draggable]");
-                            if (cardEl) cardEl.setAttribute("draggable", "false");
-                          }}
-                          onMouseLeave={(e) => {
-                            if (!resizing) {
-                              const cardEl = e.currentTarget.closest("[draggable]");
-                              if (cardEl) cardEl.setAttribute("draggable", "true");
-                            }
-                          }}
                         />
                       </div>
                     );
