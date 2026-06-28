@@ -10,7 +10,6 @@ import { toUTC } from "@/lib/date/toUTC";
 import { toLocal } from "@/lib/date/toLocal";
 import { recurrenceInputSchema } from "@/lib/validation/recurrence";
 import { CalendarEvent } from "./CalendarGrid";
-import { EditScopePrompt } from "./EditScopePrompt";
 import { updateQueryCacheWithEvent } from "@/lib/api/cache";
 
 interface EventFormProps {
@@ -18,6 +17,7 @@ interface EventFormProps {
   onClose: () => void;
   defaultDate?: Date;
   event?: CalendarEvent;
+  affectAllRecurring: boolean;
 }
 
 export const EventForm: React.FC<EventFormProps> = ({
@@ -25,6 +25,7 @@ export const EventForm: React.FC<EventFormProps> = ({
   onClose,
   defaultDate = new Date("2026-07-01"),
   event,
+  affectAllRecurring,
 }) => {
   const queryClient = useQueryClient();
   const { show: showToast } = useToast();
@@ -89,23 +90,6 @@ export const EventForm: React.FC<EventFormProps> = ({
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const [scopePromptOpen, setScopePromptOpen] = useState(false);
-  const [deletePromptOpen, setDeletePromptOpen] = useState(false);
-  const [pendingPayload, setPendingPayload] = useState<{
-    title: string;
-    description: string | null;
-    startTime: string;
-    endTime: string;
-    allDay: boolean;
-    recurrenceRule?: {
-      frequency: "DAILY" | "WEEKLY" | "MONTHLY";
-      interval: number;
-      seriesEndDate: string | null;
-      byDay: string[] | null;
-    } | null;
-    version?: number;
-  } | null>(null);
-
   /* eslint-disable react-hooks/set-state-in-effect */
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
@@ -122,9 +106,6 @@ export const EventForm: React.FC<EventFormProps> = ({
       setEndsType(initialValues.endsType);
       setEndsOnDate(initialValues.endsOnDate);
       setErrors({});
-      setScopePromptOpen(false);
-      setDeletePromptOpen(false);
-      setPendingPayload(null);
     }
   }, [isOpen, event, defaultDate]);
   /* eslint-enable react-hooks/set-state-in-effect */
@@ -242,11 +223,23 @@ export const EventForm: React.FC<EventFormProps> = ({
   });
 
   const handleDeleteClick = () => {
-    if (event?.isRecurring) {
-      setDeletePromptOpen(true);
+    if (event?.isRecurring && !event.isException) {
+      const scope = affectAllRecurring ? "ALL" : "THIS";
+      const scopeLabel = scope === "ALL" ? "entire series of recurring events" : "this recurring event instance";
+      if (window.confirm(`Are you sure you want to delete the ${scopeLabel}?`)) {
+        deleteMutation.mutate({
+          editScope: scope,
+          instanceDate: initialValues.date,
+        });
+      }
     } else {
       if (window.confirm("Are you sure you want to delete this event?")) {
-        deleteMutation.mutate({});
+        deleteMutation.mutate({
+          ...(event?.isException ? {
+            editScope: "THIS",
+            instanceDate: initialValues.date,
+          } : {})
+        });
       }
     }
   };
@@ -338,14 +331,18 @@ export const EventForm: React.FC<EventFormProps> = ({
     }
 
     if (event && event.isRecurring && !event.isException) {
-      setPendingPayload(payload);
-      setScopePromptOpen(true);
+      const finalPayload = {
+        ...payload,
+        editScope: affectAllRecurring ? ("ALL" as const) : ("THIS" as const),
+        instanceDate: initialValues.date,
+      };
+      mutation.mutate(finalPayload);
     } else {
       const finalPayload = {
         ...payload,
         ...(event && event.isException ? {
           editScope: "THIS" as const,
-          instanceDate: event.id.slice(-10),
+          instanceDate: initialValues.date,
         } : {}),
       };
       mutation.mutate(finalPayload);
@@ -662,43 +659,6 @@ export const EventForm: React.FC<EventFormProps> = ({
           </div>
         </div>
       </form>
-
-      {scopePromptOpen && (
-        <EditScopePrompt
-          isOpen={scopePromptOpen}
-          onClose={() => {
-            setScopePromptOpen(false);
-            setPendingPayload(null);
-          }}
-          onConfirm={(scope) => {
-            setScopePromptOpen(false);
-            if (pendingPayload) {
-              mutation.mutate({
-                ...pendingPayload,
-                editScope: scope,
-                instanceDate: initialValues.date,
-              });
-            }
-            setPendingPayload(null);
-          }}
-          actionType="edit"
-        />
-      )}
-
-      {deletePromptOpen && (
-        <EditScopePrompt
-          isOpen={deletePromptOpen}
-          onClose={() => setDeletePromptOpen(false)}
-          onConfirm={(scope) => {
-            setDeletePromptOpen(false);
-            deleteMutation.mutate({
-              editScope: scope,
-              instanceDate: initialValues.date,
-            });
-          }}
-          actionType="delete"
-        />
-      )}
     </Modal>
   );
 };

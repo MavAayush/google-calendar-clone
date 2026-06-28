@@ -55,7 +55,7 @@ export default function Page() {
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [isFormOpen, setFormOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
-  const [moveAllRecurring, setMoveAllRecurring] = useState(false);
+  const [affectAllRecurring, setAffectAllRecurring] = useState(false);
   const { show: showToast } = useToast();
 
   const handleSignOut = async () => {
@@ -228,7 +228,7 @@ export default function Page() {
 
   const handleEventMove = (event: CalendarEvent, newStart: Date, newEnd: Date) => {
     if (event.isRecurring && !event.isException) {
-      executeEventMove(event, newStart, newEnd, moveAllRecurring ? "ALL" : "THIS");
+      executeEventMove(event, newStart, newEnd, affectAllRecurring ? "ALL" : "THIS");
     } else {
       executeEventMove(event, newStart, newEnd, event.isException ? "THIS" : undefined);
     }
@@ -236,7 +236,7 @@ export default function Page() {
 
   const handleEventResize = (event: CalendarEvent, newEnd: Date) => {
     if (event.isRecurring && !event.isException) {
-      executeEventResize(event, newEnd, moveAllRecurring ? "ALL" : "THIS");
+      executeEventResize(event, newEnd, affectAllRecurring ? "ALL" : "THIS");
     } else {
       executeEventResize(event, newEnd, event.isException ? "THIS" : undefined);
     }
@@ -787,12 +787,12 @@ export default function Page() {
               <label className="flex items-center space-x-3 cursor-pointer group">
                 <input
                   type="checkbox"
-                  checked={moveAllRecurring}
-                  onChange={(e) => setMoveAllRecurring(e.target.checked)}
+                  checked={affectAllRecurring}
+                  onChange={(e) => setAffectAllRecurring(e.target.checked)}
                   className="h-4.5 w-4.5 rounded border-[var(--color-border)] text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer"
                 />
                 <span className="text-sm font-medium text-[var(--color-text-main)] group-hover:text-[var(--color-primary)] transition">
-                  Move all recurring events
+                  Affect changes to all recurring events
                 </span>
               </label>
             </div>
@@ -870,6 +870,7 @@ export default function Page() {
         onClose={() => setFormOpen(false)}
         defaultDate={currentDate}
         event={editingEvent || undefined}
+        affectAllRecurring={affectAllRecurring}
       />
 
     </div>

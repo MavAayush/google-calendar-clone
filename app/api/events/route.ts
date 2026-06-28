@@ -7,27 +7,6 @@ import { getCurrentUserId, getCurrentUser } from "@/lib/auth";
 import prisma from "@/lib/db/client";
 import { expandEventSeries, ExpandedInstance, EventWithRecurrence } from "@/lib/recurrence/expand";
 
-interface RawQueryResult {
-  event_data: {
-    id: string;
-    title: string;
-    description: string | null;
-    startTime: string;
-    endTime: string;
-    allDay: boolean;
-    version: number;
-    recurrenceRuleId: string | null;
-  } | null;
-  conflicts_data: {
-    id: string;
-    title: string;
-    description: string | null;
-    startTime: string;
-    endTime: string;
-    allDay: boolean;
-    version: number;
-  }[];
-}
 
 const getEventsQuerySchema = z.object({
   start: z.string().datetime(),
