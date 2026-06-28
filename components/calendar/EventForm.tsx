@@ -170,7 +170,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             ...old,
             events: old.events.map((e: CalendarEvent) =>
               e.id === event.id
-                ? { ...e, ...newEvent, version: e.version + 1 }
+                ? { ...e, ...newEvent }
                 : e
             ),
           };
@@ -328,11 +328,16 @@ export const EventForm: React.FC<EventFormProps> = ({
       payload.version = event.version;
     }
 
-    if (event && event.isRecurring) {
+    if (event && event.isRecurring && !event.isException) {
       setPendingPayload(payload);
       setScopePromptOpen(true);
     } else {
-      mutation.mutate(payload);
+      const finalPayload: any = { ...payload };
+      if (event && event.isException) {
+        finalPayload.editScope = "THIS";
+        finalPayload.instanceDate = event.id.slice(-10);
+      }
+      mutation.mutate(finalPayload);
     }
   };
 

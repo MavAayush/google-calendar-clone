@@ -28,6 +28,7 @@ interface CalendarEvent {
     byDay: string[] | null;
   } | null;
   version: number;
+  isException?: boolean;
 }
 
 export default function Page() {
@@ -141,7 +142,7 @@ export default function Page() {
           ...old,
           events: old.events.map((e: CalendarEvent) =>
             e.id === event.id
-              ? { ...e, startTime, endTime, version: e.version + 1 }
+              ? { ...e, startTime, endTime }
               : e
           ),
         };
@@ -227,18 +228,18 @@ export default function Page() {
   };
 
   const handleEventMove = (event: CalendarEvent, newStart: Date, newEnd: Date) => {
-    if (event.isRecurring) {
+    if (event.isRecurring && !event.isException) {
       setPendingRecurrenceAction({ type: "move", event, newStart, newEnd });
     } else {
-      executeEventMove(event, newStart, newEnd);
+      executeEventMove(event, newStart, newEnd, event.isException ? "THIS" : undefined);
     }
   };
 
   const handleEventResize = (event: CalendarEvent, newEnd: Date) => {
-    if (event.isRecurring) {
+    if (event.isRecurring && !event.isException) {
       setPendingRecurrenceAction({ type: "resize", event, newEnd });
     } else {
-      executeEventResize(event, newEnd);
+      executeEventResize(event, newEnd, event.isException ? "THIS" : undefined);
     }
   };
 

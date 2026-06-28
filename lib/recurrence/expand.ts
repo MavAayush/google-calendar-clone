@@ -1,8 +1,9 @@
-import { addDays, addWeeks, addMonths, format, startOfWeek } from "date-fns";
+import { addDays, addWeeks, addMonths, startOfWeek } from "date-fns";
 import { formatInTimeZone } from "@/lib/date/formatInTimeZone";
 import { toUTC } from "@/lib/date/toUTC";
 import { toLocal } from "@/lib/date/toLocal";
 import { Event, RecurrenceRule, RecurrenceException } from "@prisma/client";
+import { fromZonedTime } from "date-fns-tz";
 
 export type EventWithRecurrence = Event & {
   recurrenceRule: RecurrenceRule | null;
@@ -26,6 +27,7 @@ export interface ExpandedInstance {
     byDay: string[] | null;
   } | null;
   version: number;
+  isException?: boolean;
 }
 
 export function expandEventSeries(
@@ -48,13 +50,13 @@ export function expandEventSeries(
   const queryEndStr = formatInTimeZone(queryEnd, timezone, "yyyy-MM-dd");
 
   const candidates: string[] = [];
-  const anchorDate = new Date(seriesStartStr + "T00:00:00.000");
+  const anchorDate = fromZonedTime(seriesStartStr + "T00:00:00.000", timezone);
 
   if (rule.frequency === "DAILY") {
     let step = 0;
     while (true) {
       const currentDate = addDays(anchorDate, step * rule.interval);
-      const dateStr = format(currentDate, "yyyy-MM-dd");
+      const dateStr = formatInTimeZone(currentDate, timezone, "yyyy-MM-dd");
       if (dateStr > queryEndStr) break;
       if (seriesEndStr && dateStr > seriesEndStr) break;
 
@@ -67,7 +69,8 @@ export function expandEventSeries(
     const startOfWeekDate = startOfWeek(anchorDate, { weekStartsOn: 0 });
     const daysOfWeek = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
     const byDay = rule.byDay as string[] | null;
-    const daysToMatch = byDay && byDay.length > 0 ? byDay : [daysOfWeek[anchorDate.getDay()]];
+    const anchorDayName = formatInTimeZone(anchorDate, timezone, "EEEEEE").toUpperCase();
+    const daysToMatch = byDay && byDay.length > 0 ? byDay : [anchorDayName];
 
     let step = 0;
     while (true) {
@@ -75,7 +78,7 @@ export function expandEventSeries(
       const weekDays: string[] = [];
       for (let d = 0; d < 7; d++) {
         const day = addDays(currentWeekStart, d);
-        weekDays.push(format(day, "yyyy-MM-dd"));
+        weekDays.push(formatInTimeZone(day, timezone, "yyyy-MM-dd"));
       }
 
       if (weekDays[0] > queryEndStr) break;
@@ -97,15 +100,15 @@ export function expandEventSeries(
       step++;
     }
   } else if (rule.frequency === "MONTHLY") {
-    const targetDayOfMonth = anchorDate.getDate();
+    const targetDayOfMonth = parseInt(formatInTimeZone(anchorDate, timezone, "d"));
     let step = 0;
     while (true) {
       const currentDate = addMonths(anchorDate, step * rule.interval);
-      const dateStr = format(currentDate, "yyyy-MM-dd");
+      const dateStr = formatInTimeZone(currentDate, timezone, "yyyy-MM-dd");
       if (dateStr > queryEndStr) break;
       if (seriesEndStr && dateStr > seriesEndStr) break;
 
-      if (currentDate.getDate() === targetDayOfMonth) {
+      if (parseInt(formatInTimeZone(currentDate, timezone, "d")) === targetDayOfMonth) {
         if (dateStr >= queryStartStr && dateStr >= seriesStartStr) {
           candidates.push(dateStr);
         }
@@ -147,6 +150,7 @@ export function expandEventSeries(
               byDay: rule.byDay as string[] | null,
             },
             version: exception.overrideEvent.version,
+            isException: true,
           });
         }
         continue;
@@ -205,6 +209,7 @@ export function expandEventSeries(
             byDay: rule.byDay as string[] | null,
           },
           version: exception.overrideEvent.version,
+          isException: true,
         });
       }
     }

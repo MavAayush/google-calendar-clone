@@ -17,6 +17,7 @@ export interface CalendarEvent {
     byDay: string[] | null;
   } | null;
   version: number;
+  isException?: boolean;
 }
 
 interface CalendarGridProps {
