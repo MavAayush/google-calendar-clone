@@ -33,6 +33,7 @@ export const GET = withErrorHandling(async (request: Request): Promise<Response>
 
   console.time("GET_db_events");
   const dbEvents = await prisma.event.findMany({
+    relationLoadStrategy: "join",
     where: {
       userId,
       OR: [
