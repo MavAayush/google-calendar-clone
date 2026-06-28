@@ -75,7 +75,7 @@ export default function Page() {
     }
   })();
 
-  const { data, isLoading, error, isError } = useQuery({
+  const { data, error, isError } = useQuery({
     queryKey: ["events", view, startRange.toISOString(), endRange.toISOString()],
     queryFn: () => {
       const params = new URLSearchParams({
@@ -538,16 +538,7 @@ export default function Page() {
         </aside>
 
         <main className="flex-1 p-6 flex overflow-hidden relative">
-          {isLoading && (
-            <div className="absolute inset-0 bg-slate-50/50 backdrop-blur-[1px] flex items-center justify-center z-50">
-              <div className="flex flex-col space-y-4 w-80 p-6 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg">
-                <div className="h-6 bg-slate-200 rounded animate-pulse w-3/4"></div>
-                <div className="h-4 bg-slate-200 rounded animate-pulse w-full"></div>
-                <div className="h-4 bg-slate-200 rounded animate-pulse w-5/6"></div>
-              </div>
-            </div>
-          )}
-          <div key={view + currentDate.toISOString()} className="flex flex-1 overflow-hidden animate-fade-in">
+          <div key={view + currentDate.toISOString()} className="flex flex-1 overflow-hidden">
             {view === "month" ? (
               <MonthGrid
                 currentDate={currentDate}
