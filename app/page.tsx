@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { format, addDays, subDays, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
 import { useQuery, useMutation, useQueryClient, useIsMutating } from "@tanstack/react-query";
 import { CalendarGrid } from "@/components/calendar/CalendarGrid";
@@ -36,6 +36,19 @@ export default function Page() {
 
   const { data: session, isPending: sessionPending } = authClient.useSession();
   const [isUserMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   const [view, setView] = useState<"day" | "week" | "month">("week");
   const [currentDate, setCurrentDate] = useState<Date>(new Date("2026-07-01"));
@@ -148,7 +161,7 @@ export default function Page() {
       queryClient.invalidateQueries({ queryKey: ["events"] });
       if (data.conflicts && data.conflicts.length > 0) {
         const conflictTitles = data.conflicts.map((c) => c.title).join(", ");
-        showToast(`⚠️ Moved, but overlaps with: ${conflictTitles}`, "warning");
+        showToast(`Moved, but overlaps with: ${conflictTitles}`, "warning");
       } else {
         showToast("Event moved successfully", "success");
       }
@@ -309,98 +322,366 @@ export default function Page() {
           <div className="w-full h-full bg-[var(--color-primary)] origin-left animate-loading-slide" />
         </div>
       )}
-      <header className="flex h-16 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)] px-6 shadow-sm">
-        <div className="flex items-center space-x-6">
-          <div className="flex items-center space-x-2">
-            <svg
-              className="h-8 w-8 text-[var(--color-primary)]"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              viewBox="0 0 24 24"
+      <header
+        style={{
+          height: "64px",
+          borderBottom: "1px solid var(--color-border)",
+          backgroundColor: "var(--color-surface)",
+          paddingLeft: "24px",
+          paddingRight: "24px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          zIndex: 30,
+          position: "relative"
+        }}
+      >
+        {}
+        <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
+          {}
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }}>
+            <div
+              style={{
+                width: "36px",
+                height: "36px",
+                borderRadius: "8px",
+                backgroundColor: "var(--color-primary)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                boxShadow: "0 4px 10px rgba(59, 111, 224, 0.2)"
+              }}
             >
-              <rect x="3" y="4" width="18" height="18" rx="4" />
-              <path d="M16 2v4M8 2v4M3 10h18" />
-              <circle cx="12" cy="14" r="2" fill="currentColor" />
-            </svg>
-            <span className="font-display text-xl font-bold tracking-tight text-[var(--color-text-main)]">
-              Calendar
-            </span>
-          </div>
-          <button
-            onClick={handleToday}
-            className="rounded-full border border-[var(--color-border)] px-4 py-2 text-sm font-medium hover:border-[var(--color-border-hover)] hover:bg-[var(--color-bg-app)] transition duration-[var(--transition-fast)]"
-          >
-            Today
-          </button>
-          <div className="flex items-center space-x-1">
-            <button
-              onClick={handlePrev}
-              className="p-2 rounded-full hover:bg-[var(--color-bg-app)] text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] transition"
-            >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <button
-              onClick={handleNext}
-              className="p-2 rounded-full hover:bg-[var(--color-bg-app)] text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] transition"
-            >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
-          <h1 className="font-display text-lg font-semibold text-[var(--color-text-main)]">
-            {format(currentDate, "MMMM yyyy")}
-          </h1>
-        </div>
-
-        <div className="flex items-center space-x-4">
-          <div className="relative">
-            <select
-              value={view}
-              onChange={(e) => setView(e.target.value as "day" | "week" | "month")}
-              className="appearance-none rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-sm font-medium text-[var(--color-text-main)] hover:border-[var(--color-border-hover)] focus:outline-none transition cursor-pointer"
-              style={{ padding: "8px 36px 8px 16px" }}
-            >
-              <option value="week">Week</option>
-              <option value="day">Day</option>
-              <option value="month">Month</option>
-            </select>
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center text-[var(--color-text-muted)]" style={{ paddingRight: "12px" }}>
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              <svg
+                style={{ height: "20px", width: "20px", color: "#FFFFFF" }}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                viewBox="0 0 24 24"
+              >
+                <rect x="3" y="4" width="18" height="18" rx="4" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16 2v4M8 2v4M3 10h18" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 14v4m-3-2h6" />
               </svg>
             </div>
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <span style={{ fontFamily: "var(--font-display)", fontSize: "16px", fontWeight: 600, color: "var(--color-text-main)", lineHeight: "1.1" }}>
+                Calendar
+              </span>
+              <span style={{ fontSize: "10px", fontWeight: 600, color: "var(--color-text-muted)", letterSpacing: "0.05em", textTransform: "uppercase", marginTop: "2px" }}>
+                Workspace
+              </span>
+            </div>
           </div>
-          <div className="relative">
+
+          {}
+          <div style={{ height: "24px", width: "1px", backgroundColor: "var(--color-border)" }} />
+
+          {}
+          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+            {}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                backgroundColor: "var(--color-bg-app)",
+                padding: "2px",
+                borderRadius: "6px",
+                border: "1px solid var(--color-border)"
+              }}
+            >
+              <button
+                onClick={handlePrev}
+                title="Previous"
+                className="hover:bg-surface hover:shadow-sm transition"
+                style={{
+                  padding: "6px",
+                  borderRadius: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  border: "none",
+                  background: "none",
+                  cursor: "pointer",
+                  color: "var(--color-text-muted)"
+                }}
+              >
+                <svg style={{ height: "16px", width: "16px" }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <button
+                onClick={handleToday}
+                className="hover:bg-surface hover:shadow-sm transition"
+                style={{
+                  padding: "4px 12px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  borderRadius: "4px",
+                  border: "none",
+                  background: "none",
+                  cursor: "pointer",
+                  color: "var(--color-text-main)"
+                }}
+              >
+                Today
+              </button>
+              <button
+                onClick={handleNext}
+                title="Next"
+                className="hover:bg-surface hover:shadow-sm transition"
+                style={{
+                  padding: "6px",
+                  borderRadius: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  border: "none",
+                  background: "none",
+                  cursor: "pointer",
+                  color: "var(--color-text-muted)"
+                }}
+              >
+                <svg style={{ height: "16px", width: "16px" }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+
+            {}
+            <h1
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: "16px",
+                fontWeight: 600,
+                color: "var(--color-text-main)",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                userSelect: "none",
+                whiteSpace: "nowrap"
+              }}
+            >
+              <svg style={{ height: "18px", width: "18px", color: "var(--color-text-muted)" }} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <rect x="3" y="4" width="18" height="18" rx="2" />
+                <path d="M16 2v4M8 2v4M3 10h18" />
+              </svg>
+              {format(currentDate, "MMMM yyyy")}
+            </h1>
+          </div>
+        </div>
+
+        {}
+        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+          {}
+          <div
+            style={{
+              display: "flex",
+              backgroundColor: "var(--color-bg-app)",
+              padding: "2px",
+              borderRadius: "6px",
+              border: "1px solid var(--color-border)"
+            }}
+          >
+            {(["day", "week", "month"] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className="transition"
+                style={{
+                  padding: "4px 12px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  borderRadius: "4px",
+                  textTransform: "capitalize",
+                  border: "none",
+                  cursor: "pointer",
+                  backgroundColor: view === v ? "var(--color-surface)" : "transparent",
+                  color: view === v ? "var(--color-primary)" : "var(--color-text-muted)",
+                  boxShadow: view === v ? "0 1px 2px rgba(0,0,0,0.06)" : "none"
+                }}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+
+          {}
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <button
+              className="hover:bg-surface hover:shadow-sm transition"
+              title="Search"
+              style={{
+                padding: "8px",
+                borderRadius: "8px",
+                border: "none",
+                background: "none",
+                color: "var(--color-text-muted)",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center"
+              }}
+            >
+              <svg style={{ height: "18px", width: "18px" }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="8" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.3-4.3" />
+              </svg>
+            </button>
+            <button
+              className="hover:bg-surface hover:shadow-sm transition"
+              title="Notifications"
+              style={{
+                padding: "8px",
+                borderRadius: "8px",
+                border: "none",
+                background: "none",
+                color: "var(--color-text-muted)",
+                cursor: "pointer",
+                position: "relative",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center"
+              }}
+            >
+              <svg style={{ height: "18px", width: "18px" }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0 1 18 14.158V11a6.002 6.002 0 0 0-4-5.659V5a2 2 0 1 0-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 1 1-6 0v-1m6 0H9" />
+              </svg>
+              <span
+                style={{
+                  position: "absolute",
+                  top: "6px",
+                  right: "6px",
+                  height: "8px",
+                  width: "8px",
+                  borderRadius: "50%",
+                  backgroundColor: "var(--color-danger)",
+                  border: "2px solid var(--color-surface)"
+                }}
+              />
+            </button>
+          </div>
+
+          {/* User Menu */}
+          <div ref={userMenuRef} style={{ position: "relative" }}>
             <button
               onClick={() => setUserMenuOpen(!isUserMenuOpen)}
-              className="h-8 w-8 rounded-full bg-gradient-to-tr from-[var(--color-primary)] to-[var(--color-primary-hover)] flex items-center justify-center text-white font-bold text-sm shadow-md focus:outline-none hover:opacity-90 transition cursor-pointer"
+              className="hover:opacity-90 transition"
+              style={{
+                height: "32px",
+                width: "32px",
+                borderRadius: "50%",
+                backgroundColor: "var(--color-primary)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#FFFFFF",
+                fontWeight: 600,
+                fontSize: "14px",
+                border: "2px solid var(--color-surface)",
+                cursor: "pointer",
+                boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                outline: "none"
+              }}
             >
               {session.user.name ? session.user.name.charAt(0).toUpperCase() : "U"}
             </button>
             {isUserMenuOpen && (
               <div
-                className="absolute right-0 mt-2 w-48 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg py-1 z-50 animate-fade-in"
-                style={{ right: 0, top: "100%", marginTop: "8px" }}
+                className="animate-fade-in"
+                style={{
+                  position: "absolute",
+                  right: 0,
+                  marginTop: "8px",
+                  width: "240px",
+                  borderRadius: "8px",
+                  border: "1px solid var(--color-border)",
+                  backgroundColor: "var(--color-surface)",
+                  padding: "4px",
+                  zIndex: 50,
+                  boxShadow: "0 10px 25px -5px rgba(0,0,0,0.1)"
+                }}
               >
-                <div className="px-4 py-2 border-b border-[var(--color-border)]" style={{ padding: "12px 16px" }}>
-                  <p className="text-sm font-semibold text-text-primary truncate">
-                    {session.user.name || "User"}
-                  </p>
-                  <p className="text-xs text-text-secondary truncate" style={{ marginTop: "2px" }}>
-                    {session.user.email}
-                  </p>
+                <div style={{ padding: "12px", borderBottom: "1px solid var(--color-border)", display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div
+                    style={{
+                      height: "32px",
+                      width: "32px",
+                      borderRadius: "50%",
+                      backgroundColor: "var(--color-bg-app)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "var(--color-text-main)",
+                      fontWeight: 600,
+                      fontSize: "12px",
+                      border: "1px solid var(--color-border)"
+                    }}
+                  >
+                    {session.user.name ? session.user.name.charAt(0).toUpperCase() : "U"}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", margin: 0 }}>
+                      {session.user.name || "User"}
+                    </p>
+                    <p style={{ fontSize: "11px", color: "var(--color-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", margin: 0, marginTop: "2px" }}>
+                      {session.user.email}
+                    </p>
+                  </div>
                 </div>
-                <button
-                  onClick={handleSignOut}
-                  className="w-full text-left px-4 py-2 text-sm hover:bg-[var(--color-bg-app)] transition focus:outline-none cursor-pointer"
-                  style={{ color: "var(--color-danger)", border: "none", background: "none", padding: "8px 16px" }}
-                >
-                  Sign out
-                </button>
+
+                <div style={{ padding: "4px 0" }}>
+                  <button
+                    onClick={() => {}}
+                    className="hover:bg-surface-muted hover:text-text-primary transition"
+                    style={{
+                      width: "100%",
+                      textAlign: "left",
+                      padding: "8px 12px",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      color: "var(--color-text-muted)",
+                      borderRadius: "6px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      border: "none",
+                      background: "none",
+                      cursor: "pointer"
+                    }}
+                  >
+                    <svg style={{ height: "16px", width: "16px", color: "var(--color-text-muted)" }} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span>Settings</span>
+                  </button>
+                  
+                  <button
+                    onClick={handleSignOut}
+                    className="hover:bg-surface-muted transition"
+                    style={{
+                      width: "100%",
+                      textAlign: "left",
+                      padding: "8px 12px",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      color: "var(--color-danger)",
+                      borderRadius: "6px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      border: "none",
+                      background: "none",
+                      cursor: "pointer"
+                    }}
+                  >
+                    <svg style={{ height: "16px", width: "16px", color: "var(--color-danger)" }} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    <span>Sign out</span>
+                  </button>
+                </div>
               </div>
             )}
           </div>
