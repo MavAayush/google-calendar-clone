@@ -779,7 +779,7 @@ export default function Page() {
             </div>
           </div>
 
-          <div className="space-y-3" style={{ borderBottom: "1px solid var(--color-border)", paddingBottom: "16px" }}>
+          <div className="space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
               Preferences
             </h3>
@@ -793,44 +793,6 @@ export default function Page() {
                 />
                 <span className="text-sm font-medium text-[var(--color-text-main)] group-hover:text-[var(--color-primary)] transition">
                   Affect changes to all recurring events
-                </span>
-              </label>
-            </div>
-          </div>
-
-          <div className="space-y-3" style={{ marginTop: "16px" }}>
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
-              My Calendars
-            </h3>
-            <div className="space-y-2.5">
-              <label className="flex items-center space-x-3 cursor-pointer group">
-                <input
-                  type="checkbox"
-                  defaultChecked
-                  className="h-4.5 w-4.5 rounded border-[var(--color-border)] text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer"
-                />
-                <span className="text-sm font-medium text-[var(--color-text-main)] group-hover:text-[var(--color-primary)] transition">
-                  Work
-                </span>
-              </label>
-              <label className="flex items-center space-x-3 cursor-pointer group">
-                <input
-                  type="checkbox"
-                  defaultChecked
-                  className="h-4.5 w-4.5 rounded border-[var(--color-border)] text-green-500 focus:ring-green-500 cursor-pointer"
-                />
-                <span className="text-sm font-medium text-[var(--color-text-main)] group-hover:text-green-500 transition">
-                  Personal
-                </span>
-              </label>
-              <label className="flex items-center space-x-3 cursor-pointer group">
-                <input
-                  type="checkbox"
-                  defaultChecked
-                  className="h-4.5 w-4.5 rounded border-[var(--color-border)] text-purple-500 focus:ring-purple-500 cursor-pointer"
-                />
-                <span className="text-sm font-medium text-[var(--color-text-main)] group-hover:text-purple-500 transition">
-                  Reminders
                 </span>
               </label>
             </div>

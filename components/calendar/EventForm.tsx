@@ -225,22 +225,17 @@ export const EventForm: React.FC<EventFormProps> = ({
   const handleDeleteClick = () => {
     if (event?.isRecurring && !event.isException) {
       const scope = affectAllRecurring ? "ALL" : "THIS";
-      const scopeLabel = scope === "ALL" ? "entire series of recurring events" : "this recurring event instance";
-      if (window.confirm(`Are you sure you want to delete the ${scopeLabel}?`)) {
-        deleteMutation.mutate({
-          editScope: scope,
-          instanceDate: initialValues.date,
-        });
-      }
+      deleteMutation.mutate({
+        editScope: scope,
+        instanceDate: initialValues.date,
+      });
     } else {
-      if (window.confirm("Are you sure you want to delete this event?")) {
-        deleteMutation.mutate({
-          ...(event?.isException ? {
-            editScope: "THIS",
-            instanceDate: initialValues.date,
-          } : {})
-        });
-      }
+      deleteMutation.mutate({
+        ...(event?.isException ? {
+          editScope: "THIS",
+          instanceDate: initialValues.date,
+        } : {})
+      });
     }
   };
 
