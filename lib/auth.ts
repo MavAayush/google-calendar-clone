@@ -14,7 +14,13 @@ export class UnauthorizedError extends Error {
 const jwksUrl = `${process.env.NEON_AUTH_BASE_URL}/jwt`;
 const JWKS = createRemoteJWKSet(new URL(jwksUrl));
 
-const userCache = new Map<string, string>();
+export interface AuthUser {
+  id: string;
+  email: string;
+  timezone: string;
+}
+
+const userCache = new Map<string, AuthUser>();
 
 const getCookies = (request: Request): Record<string, string> => {
   const cookieHeader = request.headers.get("cookie");
@@ -32,7 +38,7 @@ const getCookies = (request: Request): Record<string, string> => {
   return result;
 };
 
-export const getCurrentUserId = async (request: Request): Promise<string> => {
+export const getCurrentUser = async (request: Request): Promise<AuthUser> => {
   const cookieMap = getCookies(request);
 
   const sessionDataCookie = 
@@ -50,8 +56,8 @@ export const getCurrentUserId = async (request: Request): Promise<string> => {
       if (userPayload && userPayload.email) {
         const email = userPayload.email;
         
-        let userId = userCache.get(email);
-        if (!userId) {
+        let cachedUser = userCache.get(email);
+        if (!cachedUser) {
           let user = await prisma.user.findUnique({
             where: { email },
           });
@@ -65,13 +71,17 @@ export const getCurrentUserId = async (request: Request): Promise<string> => {
               },
             });
           }
-          userId = user.id;
-          userCache.set(email, userId);
+          cachedUser = {
+            id: user.id,
+            email: user.email,
+            timezone: user.timezone,
+          };
+          userCache.set(email, cachedUser);
         }
-        return userId;
+        return cachedUser;
       }
     } catch (err: any) {
-      console.warn("[getCurrentUserId] Local session_data verification failed:", err.message);
+      console.warn("[getCurrentUser] Local session_data verification failed:", err.message);
     }
   }
 
@@ -85,8 +95,8 @@ export const getCurrentUserId = async (request: Request): Promise<string> => {
       const { payload } = await jwtVerify(sessionTokenCookie, JWKS);
       const email = (payload as any).email || (payload as any).sub;
       if (email) {
-        let userId = userCache.get(email);
-        if (!userId) {
+        let cachedUser = userCache.get(email);
+        if (!cachedUser) {
           let user = await prisma.user.findUnique({
             where: { email },
           });
@@ -100,17 +110,21 @@ export const getCurrentUserId = async (request: Request): Promise<string> => {
               },
             });
           }
-          userId = user.id;
-          userCache.set(email, userId);
+          cachedUser = {
+            id: user.id,
+            email: user.email,
+            timezone: user.timezone,
+          };
+          userCache.set(email, cachedUser);
         }
-        return userId;
+        return cachedUser;
       }
     } catch (err: any) {
-      console.warn("[getCurrentUserId] Local OIDC JWT verification failed:", err.message);
+      console.warn("[getCurrentUser] Local OIDC JWT verification failed:", err.message);
     }
   }
 
-  console.log("[getCurrentUserId] Local checks failed. Falling back to remote auth.getSession().");
+  console.log("[getCurrentUser] Local checks failed. Falling back to remote auth.getSession().");
   const { data: session } = await auth.getSession();
 
   if (!session?.user) {
@@ -118,8 +132,8 @@ export const getCurrentUserId = async (request: Request): Promise<string> => {
   }
 
   const email = session.user.email;
-  let userId = userCache.get(email);
-  if (!userId) {
+  let cachedUser = userCache.get(email);
+  if (!cachedUser) {
     let user = await prisma.user.findUnique({
       where: { email },
     });
@@ -133,9 +147,18 @@ export const getCurrentUserId = async (request: Request): Promise<string> => {
         },
       });
     }
-    userId = user.id;
-    userCache.set(email, userId);
+    cachedUser = {
+      id: user.id,
+      email: user.email,
+      timezone: user.timezone,
+    };
+    userCache.set(email, cachedUser);
   }
 
-  return userId;
+  return cachedUser;
+};
+
+export const getCurrentUserId = async (request: Request): Promise<string> => {
+  const user = await getCurrentUser(request);
+  return user.id;
 };

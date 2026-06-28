@@ -3,7 +3,7 @@ import { z } from "zod";
 import { withErrorHandling } from "@/middleware/errors";
 import { withValidation } from "@/middleware/validate";
 import { eventInputSchema, EventInput } from "@/lib/validation/event";
-import { getCurrentUserId } from "@/lib/auth";
+import { getCurrentUserId, getCurrentUser } from "@/lib/auth";
 import prisma from "@/lib/db/client";
 import { findConflictingEvents } from "@/lib/db/conflicts";
 import { expandEventSeries, ExpandedInstance, EventWithRecurrence } from "@/lib/recurrence/expand";
@@ -25,16 +25,11 @@ export const GET = withErrorHandling(async (request: Request): Promise<Response>
 
   const { start, end } = parsedQuery;
   console.time("GET_total");
-  console.time("GET_getCurrentUserId");
-  const userId = await getCurrentUserId(request);
-  console.timeEnd("GET_getCurrentUserId");
-
-  console.time("GET_user_timezone");
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-  });
-  const timezone = user?.timezone || "UTC";
-  console.timeEnd("GET_user_timezone");
+  console.time("GET_getCurrentUser");
+  const user = await getCurrentUser(request);
+  const userId = user.id;
+  const timezone = user.timezone;
+  console.timeEnd("GET_getCurrentUser");
 
   console.time("GET_db_events");
   const dbEvents = await prisma.event.findMany({
