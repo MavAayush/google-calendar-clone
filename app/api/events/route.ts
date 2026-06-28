@@ -121,45 +121,61 @@ export const POST = withErrorHandling(
     const userId = await getCurrentUserId(request);
     console.timeEnd("POST_getCurrentUserId");
 
-    console.time("POST_find_conflicts");
-    const conflicts = await findConflictingEvents(
-      userId,
-      new Date(body.startTime),
-      new Date(body.endTime)
-    );
-    console.timeEnd("POST_find_conflicts");
-
-    let recurrenceRuleId: string | undefined = undefined;
-
-    console.time("POST_db_write");
-    if (body.recurrenceRule) {
-      const rec = await prisma.recurrenceRule.create({
-        data: {
-          frequency: body.recurrenceRule.frequency,
-          interval: body.recurrenceRule.interval,
-          seriesStartDate: new Date(body.startTime),
-          seriesEndDate: body.recurrenceRule.seriesEndDate ? new Date(body.recurrenceRule.seriesEndDate) : null,
-          byDay: body.recurrenceRule.byDay || undefined,
+    console.time("POST_db_transaction");
+    const { event, conflicts } = await prisma.$transaction(async (tx) => {
+      const dbConflicts = await tx.event.findMany({
+        where: {
+          userId,
+          startTime: { lt: new Date(body.endTime) },
+          endTime: { gt: new Date(body.startTime) },
         },
       });
-      recurrenceRuleId = rec.id;
-    }
 
-    const event = await prisma.event.create({
-      data: {
-        userId,
-        title: body.title,
-        description: body.description || null,
-        startTime: new Date(body.startTime),
-        endTime: new Date(body.endTime),
-        allDay: body.allDay,
-        recurrenceRuleId,
-      },
-      include: {
-        recurrenceRule: true,
-      },
+      const conflictsMapped = dbConflicts.map((e) => ({
+        id: e.id,
+        title: e.title,
+        description: e.description,
+        startTime: e.startTime.toISOString(),
+        endTime: e.endTime.toISOString(),
+        allDay: e.allDay,
+        isRecurring: false,
+        recurrence: null,
+        version: e.version,
+      }));
+
+      let recurrenceRuleId: string | undefined = undefined;
+
+      if (body.recurrenceRule) {
+        const rec = await tx.recurrenceRule.create({
+          data: {
+            frequency: body.recurrenceRule.frequency,
+            interval: body.recurrenceRule.interval,
+            seriesStartDate: new Date(body.startTime),
+            seriesEndDate: body.recurrenceRule.seriesEndDate ? new Date(body.recurrenceRule.seriesEndDate) : null,
+            byDay: body.recurrenceRule.byDay || undefined,
+          },
+        });
+        recurrenceRuleId = rec.id;
+      }
+
+      const createdEvent = await tx.event.create({
+        data: {
+          userId,
+          title: body.title,
+          description: body.description || null,
+          startTime: new Date(body.startTime),
+          endTime: new Date(body.endTime),
+          allDay: body.allDay,
+          recurrenceRuleId,
+        },
+        include: {
+          recurrenceRule: true,
+        },
+      });
+
+      return { event: createdEvent, conflicts: conflictsMapped };
     });
-    console.timeEnd("POST_db_write");
+    console.timeEnd("POST_db_transaction");
 
     const formattedEvent = {
       id: event.id,
